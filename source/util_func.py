@@ -185,8 +185,8 @@ def load_data(DATA_PATH, TRAIN_SPLIT,flag_out_blur,
     return [loader_train, loader_valid], total_steps
 
 
-def load_model(model_dir, model_name, TRAIN_PARAMS, DATA_PARAMS):
-    arch = importlib.import_module('arch.dofNet_arch' + str(TRAIN_PARAMS['ARCH_NUM']))
+def load_model(model_dir, model_name, TRAIN_PARAMS, DATA_PARAMS,OUTPUT_PARAMS):
+    arch = importlib.import_module('arch.'+OUTPUT_PARAMS['MODEL_NAME'])
 
     ch_inp_num = 0
     if DATA_PARAMS['FLAG_IO_DATA']['INP_RGB']:
@@ -214,7 +214,7 @@ def load_model(model_dir, model_name, TRAIN_PARAMS, DATA_PARAMS):
     else:
         model = arch.AENet(total_ch_inp, ch_out_num_all, TRAIN_PARAMS['FILTER_NUM'])
     model.apply(weights_init)
-
+    
     params = list(model.parameters())
     print("model.parameters()", len(params))
     pytorch_total_params = sum(p.numel() for p in model.parameters())
@@ -234,18 +234,6 @@ def set_comp_device(FLAG_GPU):
     if FLAG_GPU:
         device_comp = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     return device_comp
-
-
-def set_output_folders(OUTPUT_PARAMS, DATA_PARAMS, TRAIN_PARAMS):
-    model_name = 'a' + str(TRAIN_PARAMS['ARCH_NUM']).zfill(2) + '_d' + str(DATA_PARAMS['DATA_NUM']).zfill(2) + '_t' + str(
-        OUTPUT_PARAMS['EXP_NUM']).zfill(2)
-    res_dir = OUTPUT_PARAMS['RESULT_PATH'] + model_name + '/'
-    models_dir = OUTPUT_PARAMS['MODEL_PATH'] + model_name + '/'
-    if not isdir(models_dir):
-        mkdir(models_dir)
-    if not isdir(res_dir):
-        mkdir(res_dir)
-    return models_dir, model_name, res_dir
 
 
 def compute_loss(Y_est, Y_gt, criterion):

@@ -200,6 +200,7 @@ def load_data(DATA_PATH, DATA_SET, DATA_NUM, INP_IMG_NUM, FLAG_SHUFFLE, FLAG_IO_
     total_steps = int(len(dataset_train) / BATCH_SIZE)
     print("Total number of steps per epoch:", total_steps)
     print("Total number of training sample:", len(dataset_train))
+    print("Total number of validataion sample:", len(dataset_valid))
 
     return [loader_train, loader_valid], total_steps
 

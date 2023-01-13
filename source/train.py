@@ -48,6 +48,7 @@ DATA_PARAMS = {
     'DATA_PATH': 'C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\test\\',
     'FLAG_NOISE': False,
     'FLAG_SHUFFLE': False,
+    'INP_IMG_NUM':1,
     'FLAG_IO_DATA': {
         'INP_RGB': True,
         'INP_COC': False,
@@ -68,9 +69,11 @@ DATA_PARAMS = {
     'MAX_DPT': 3.,
 }
 
+
 OUTPUT_PARAMS = {
-    'RESULT_PATH': 'C:\\Users\\lahir\\code\\defocus\\results\\',
-    'MODEL_PATH': 'C:\\Users\\lahir\\code\\defocus\\models\\',
+    'RESULT_DIR': 'C:\\Users\\lahir\\code\\defocus\\results\\',
+    'MODEL_DIR': 'C:\\Users\\lahir\\code\\defocus\\models\\',
+    'MODEL_NAME':'dofNet_arch',
     'VIZ_PORT': 8098, 'VIZ_HOSTNAME': "http://localhost", 'VIZ_ENV_NAME':'main',
     'VIZ_SHOW_INPUT': True, 'VIZ_SHOW_MID': True,
     'EXP_NUM': 1,
@@ -78,13 +81,6 @@ OUTPUT_PARAMS = {
 }
 
 
-load_model = defocus_exp.capture(util_func.load_model)
-load_data = defocus_exp.capture(util_func.load_data, prefix='DATA_PARAMS')
-set_comp_device = defocus_exp.capture(util_func.set_comp_device, prefix='TRAIN_PARAMS')
-set_output_folders = defocus_exp.capture(util_func.set_output_folders)
-
-
-@defocus_exp.capture
 def forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS, stacknum=1, additional_input=None):
     #to train with random number of inputs
     if TRAIN_PARAMS['RANDOM_LEN_INPUT']==1 and stacknum<DATA_PARAMS['INP_IMG_NUM']:
@@ -102,8 +98,7 @@ importlib.reload(util_func)
 import matplotlib.pyplot as plt
 
 
-@defocus_exp.capture
-def train_model(loaders, model_info, viz_info, forward_pass, TRAIN_PARAMS, DATA_PARAMS):
+def train_model(loaders, model_info, forward_pass, TRAIN_PARAMS, DATA_PARAMS):
     criterion = torch.nn.MSELoss()
     optimizer = optim.Adam(model_info['model_params'], lr=TRAIN_PARAMS['LEARNING_RATE'])
 
@@ -116,7 +111,7 @@ def train_model(loaders, model_info, viz_info, forward_pass, TRAIN_PARAMS, DATA_
         loss_sum, iter_count = 0, 0
 
         for st_iter, sample_batch in enumerate(loaders[0]):
-            break
+            
             # Setting up input and output data
             X = sample_batch['input'].float().to(model_info['device_comp'])
             Y = sample_batch['output'].float().to(model_info['device_comp'])
@@ -179,10 +174,9 @@ def train_model(loaders, model_info, viz_info, forward_pass, TRAIN_PARAMS, DATA_
         if (epoch_iter + 1) % 10 == 0:
             torch.save(model_info['model'].state_dict(), model_info['model_dir'] + model_info['model_name'] + '_ep' + str(0) + '.pth')
 
-@defocus_exp.automain
 def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):    
     # Initial preparations
-    model_dir, model_name, res_dir = util_func.set_output_folders(OUTPUT_PARAMS, DATA_PARAMS, TRAIN_PARAMS)
+    model_dir, model_name, res_dir=OUTPUT_PARAMS['MODEL_DIR'],OUTPUT_PARAMS['MODEL_NAME']+str(TRAIN_PARAMS['ARCH_NUM']),OUTPUT_PARAMS['RESULT_DIR']
     device_comp =  util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
 
     # Training initializations
@@ -220,10 +214,6 @@ def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):
                   'model_params': model_params,
                   }
     print("inp_ch_num",inp_ch_num,"   out_ch_num",out_ch_num)
-
-    # set visualization (optional)
-    viz_info = util_func.Visualization(OUTPUT_PARAMS['VIZ_PORT'], OUTPUT_PARAMS['VIZ_HOSTNAME'], model_name, OUTPUT_PARAMS['VIZ_SHOW_INPUT'],
-                                       flag_show_mid = OUTPUT_PARAMS['VIZ_SHOW_MID'], env_name=OUTPUT_PARAMS['VIZ_ENV_NAME'])
     # Run training
-    train_model(loaders=loaders, model_info=model_info, viz_info=viz_info, forward_pass=forward_pass)
+    train_model(loaders=loaders, model_info=model_info, forward_pass=forward_pass)
 

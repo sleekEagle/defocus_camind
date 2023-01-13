@@ -16,69 +16,69 @@ import numpy as np
 import importlib
 import random
 import math
+from sacred import Experiment
 import csv
 import util_func_defocusnet
 
 
 
-def my_config():
-    TRAIN_PARAMS = {
-        'ARCH_NUM': 44,
-        'FILTER_NUM': 16,
-        'LEARNING_RATE': 0.0001,
-        'FLAG_GPU': True,
-        'EPOCHS_NUM': 1, 'EPOCH_START': 0,
-        'RANDOM_LEN_INPUT': 0,
-        'TRAINING_MODE': 1,
+TRAIN_PARAMS = {
+    'ARCH_NUM': 1,
+    'FILTER_NUM': 16,
+    'LEARNING_RATE': 0.0001,
+    'FLAG_GPU': True,
+    'EPOCHS_NUM': 1, 'EPOCH_START': 0,
+    'RANDOM_LEN_INPUT': 0,
+    'TRAINING_MODE': 1,
 
-        'MODEL_STEPS': 1,
+    'MODEL_STEPS': 1,
 
-        'MODEL1_LOAD': False,
-        'MODEL1_ARCH_NUM': 44,
-        'MODEL1_NAME': "d01_t01", 'MODEL1_INPUT_NUM': 5,
-        'MODEL1_EPOCH': 1000, 'MODEL1_FILTER_NUM': 16,
-        'MODEL1_LOSS_WEIGHT': 1.,
+    'MODEL1_LOAD': False,
+    'MODEL1_ARCH_NUM': 44,
+    'MODEL1_NAME': "d01_t01", 'MODEL1_INPUT_NUM': 5,
+    'MODEL1_EPOCH': 1000, 'MODEL1_FILTER_NUM': 16,
+    'MODEL1_LOSS_WEIGHT': 1.,
 
-        'MODEL2_LOAD': False,
-        'MODEL2_NAME': "a44_d01_t01",
-        'MODEL2_EPOCH': 500,
-        'MODEL2_TRAIN_STEP': True,
-    }
+    'MODEL2_LOAD': False,
+    'MODEL2_NAME': "a44_d01_t01",
+    'MODEL2_EPOCH': 500,
+    'MODEL2_TRAIN_STEP': True,
+}
 
-    DATA_PARAMS = {
-        'DATA_PATH': '../data/',
-        'DATA_SET': 'fs_',
-        'DATA_NUM': 1,
-        'FLAG_NOISE': False,
-        'FLAG_SHUFFLE': False,
-        'INP_IMG_NUM': 1,
-        'FLAG_IO_DATA': {
-            'INP_RGB': True,
-            'INP_COC': False,
-            'INP_AIF': False,
-            'INP_DIST':True,
+DATA_PARAMS = {
+    'DATA_PATH': 'C:\\Users\\lahir\\focusdata\\fs_6\\',
+    'DATA_SET': 'fs_',
+    'DATA_NUM': 6,
+    'FLAG_NOISE': False,
+    'FLAG_SHUFFLE': False,
+    'INP_IMG_NUM': 1,
+    'FLAG_IO_DATA': {
+        'INP_RGB': True,
+        'INP_COC': False,
+        'INP_AIF': False,
+        'INP_DIST':True,
 
-            'OUT_COC': True,
-            'OUT_DEPTH': True,
-        },
-        'TRAIN_SPLIT': 0.8,
-        'DATASET_SHUFFLE': True,
-        'WORKERS_NUM': 4,
-        'BATCH_SIZE': 16,
-        'DATA_RATIO_STRATEGY': 0,
-        'FOCUS_DIST': [0.1,.15,.3,0.7,1.5],
-        'F_NUMBER': 1.,
-        'MAX_DPT': 3.,
-    }
+        'OUT_COC': True,
+        'OUT_DEPTH': True,
+    },
+    'TRAIN_SPLIT': 0.8,
+    'DATASET_SHUFFLE': True,
+    'WORKERS_NUM': 4,
+    'BATCH_SIZE': 16,
+    'DATA_RATIO_STRATEGY': 0,
+    'FOCUS_DIST': [0.1,.15,.3,0.7,1.5],
+    'F_NUMBER': 1.,
+    'MAX_DPT': 3.,
+}
 
-    OUTPUT_PARAMS = {
-        'RESULT_PATH': '../results/',
-        'MODEL_PATH': '../models/',
-        'VIZ_PORT': 8098, 'VIZ_HOSTNAME': "http://localhost", 'VIZ_ENV_NAME':'main',
-        'VIZ_SHOW_INPUT': True, 'VIZ_SHOW_MID': True,
-        'EXP_NUM': 1,
-        'COMMENT': "Default",
-    }
+OUTPUT_PARAMS = {
+    'RESULT_PATH': 'C:\\Users\\lahir\\code\\defocus\\results\\',
+    'MODEL_PATH': 'C:\\Users\\lahir\\code\\defocus\\models\\',
+    'VIZ_PORT': 8098, 'VIZ_HOSTNAME': "http://localhost", 'VIZ_ENV_NAME':'main',
+    'VIZ_SHOW_INPUT': True, 'VIZ_SHOW_MID': True,
+    'EXP_NUM': 1,
+    'COMMENT': "Default",
+}
 
 
 def forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS, stacknum=1, additional_input=None):
@@ -94,7 +94,7 @@ def forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS, stacknum=1, additiona
     return (outputs[1], outputs[0]) if TRAIN_PARAMS['TRAINING_MODE']==2 else (outputs, outputs)
 
 
-def train_model(loaders, model_info, viz_info, forward_pass, TRAIN_PARAMS, DATA_PARAMS):
+def train_model(loaders, model_info, forward_pass, TRAIN_PARAMS, DATA_PARAMS):
     criterion = torch.nn.MSELoss()
     optimizer = optim.Adam(model_info['model_params'], lr=TRAIN_PARAMS['LEARNING_RATE'])
 
@@ -169,17 +169,20 @@ def train_model(loaders, model_info, viz_info, forward_pass, TRAIN_PARAMS, DATA_
         # Save model
         if (epoch_iter + 1) % 10 == 0:
             torch.save(model_info['model'].state_dict(), model_info['model_dir'] + model_info['model_name'] + '_ep' + str(0) + '.pth')
-
+import importlib
+importlib.reload(util_func_defocusnet)
 
 def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):
     # Initial preparations
     model_dir, model_name, res_dir = util_func_defocusnet.set_output_folders(OUTPUT_PARAMS, DATA_PARAMS, TRAIN_PARAMS)
-    device_comp =  util_func_defocusnet.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
+    device_comp = util_func_defocusnet.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
 
     # Training initializations
-    loaders, total_steps = util_func_defocusnet.load_data(DATA_PARAMS['DATA_PATH'],DATA_PARAMS['TRAIN_SPLIT'],DATA_PARAMS['FLAG_IO_DATA']['OUT_COC'],
-    DATA_PARAMS['WORKERS_NUM'],DATA_PARAMS['BATCH_SIZE'],DATA_PARAMS['DATASET_SHUFFLE'],
-    DATA_PARAMS['F_NUMBER'],DATA_PARAMS['MAX_DPT'],DATA_PARAMS['FLAG_IO_DATA']['NORMALIZE'])
+    loaders, total_steps = util_func_defocusnet.load_data(DATA_PARAMS['DATA_PATH'],DATA_PARAMS['DATA_SET'],DATA_PARAMS['DATA_NUM'],
+    DATA_PARAMS['INP_IMG_NUM'],DATA_PARAMS['FLAG_SHUFFLE'],DATA_PARAMS['FLAG_IO_DATA'],DATA_PARAMS['TRAIN_SPLIT'],
+    DATA_PARAMS['WORKERS_NUM'],DATA_PARAMS['BATCH_SIZE'],DATA_PARAMS['DATASET_SHUFFLE'],DATA_PARAMS['DATA_RATIO_STRATEGY'],
+    DATA_PARAMS['FOCUS_DIST'],
+    DATA_PARAMS['F_NUMBER'],DATA_PARAMS['MAX_DPT'])
 
     model, inp_ch_num, out_ch_num = util_func_defocusnet.load_model(model_dir, model_name,TRAIN_PARAMS, DATA_PARAMS)
     model = model.to(device=device_comp)
@@ -213,4 +216,4 @@ def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):
     print("inp_ch_num",inp_ch_num,"   out_ch_num",out_ch_num)
 
     # Run training
-    train_model(loaders=loaders, model_info=model_info, viz_info=viz_info, forward_pass=forward_pass)
+    train_model(loaders=loaders, model_info=model_info, forward_pass=forward_pass)
