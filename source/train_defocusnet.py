@@ -34,13 +34,13 @@ TRAIN_PARAMS = {
     'MODEL_STEPS': 1,
 
     'MODEL1_LOAD': False,
-    'MODEL1_ARCH_NUM': 44,
-    'MODEL1_NAME': "d01_t01", 'MODEL1_INPUT_NUM': 5,
-    'MODEL1_EPOCH': 1000, 'MODEL1_FILTER_NUM': 16,
+    'MODEL1_ARCH_NUM': 1,
+    'MODEL1_NAME': "d06_t01", 'MODEL1_INPUT_NUM': 1,
+    'MODEL1_EPOCH': 0, 'MODEL1_FILTER_NUM': 16,
     'MODEL1_LOSS_WEIGHT': 1.,
 
     'MODEL2_LOAD': False,
-    'MODEL2_NAME': "a44_d01_t01",
+    'MODEL2_NAME': "a01_d06_t01",
     'MODEL2_EPOCH': 500,
     'MODEL2_TRAIN_STEP': True,
 }
@@ -93,8 +93,29 @@ def forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS, stacknum=1, additiona
 
     return (outputs[1], outputs[0]) if TRAIN_PARAMS['TRAINING_MODE']==2 else (outputs, outputs)
 
+def eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS):
+    mse_ar=[]
+    for st_iter, sample_batch in enumerate(loaders[1]):
+        X = sample_batch['input'].float().to(model_info['device_comp'])
+        Y = sample_batch['output'].float().to(model_info['device_comp'])
+        if TRAIN_PARAMS['TRAINING_MODE'] == 2:
+            gt_step1 = Y[:, :-1, :, :]
+            gt_step2 = Y[:, -1:, :, :]
+        stacknum = DATA_PARAMS['INP_IMG_NUM']
+        focus_dists = DATA_PARAMS['FOCUS_DIST']
+        X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
+        for t in range(stacknum):
+            if DATA_PARAMS['FLAG_IO_DATA']['INP_DIST']:
+                focus_distance=sample_batch['fdist'][0].item()/focus_dists[-1]
+                #focus_distance = focus_dists[DATA_PARAMS['REQ_F_IDX']]/focus_dists[-1]
+                X2_fcs[0, t:(t + 1), :, :] = X2_fcs[0, t:(t + 1), :, :] * (focus_distance)
+        X2_fcs = X2_fcs.float().to(model_info['device_comp'])
+        output_step1, output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
+        mse_val, ssim_val, psnr_val=util_func_defocusnet.compute_all_metrics(output_step2,gt_step2)
+        mse_ar.append(mse_val)
+    return sum(mse_ar)/len(loaders[1]) 
 
-def train_model(loaders, model_info, forward_pass, TRAIN_PARAMS, DATA_PARAMS):
+def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
     criterion = torch.nn.MSELoss()
     optimizer = optim.Adam(model_info['model_params'], lr=TRAIN_PARAMS['LEARNING_RATE'])
 
@@ -162,10 +183,8 @@ def train_model(loaders, model_info, forward_pass, TRAIN_PARAMS, DATA_PARAMS):
         # Save model
         if (epoch_iter + 1) % 10 == 0:
             torch.save(model_info['model'].state_dict(), model_info['model_dir'] + model_info['model_name'] + '_ep' + str(0) + '.pth')
-
-import importlib
-importlib.reload(util_func_defocusnet)
-util_func_defocusnet.compute_all_metrics(output_step2,Y)
+            mean_mse=eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS)
+            print('mean MSE: '+str(mean_mse))
 
 def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):
     # Initial preparations
@@ -211,4 +230,6 @@ def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):
     print("inp_ch_num",inp_ch_num,"   out_ch_num",out_ch_num)
 
     # Run training
-    train_model(loaders=loaders, model_info=model_info, forward_pass=forward_pass,TRAIN_PARAMS=TRAIN_PARAMS, DATA_PARAMS=DATA_PARAMS)
+    train_model(loaders=loaders, model_info=model_info,TRAIN_PARAMS=TRAIN_PARAMS, DATA_PARAMS=DATA_PARAMS)
+
+run_exp(TRAIN_PARAMS,OUTPUT_PARAMS)
