@@ -27,7 +27,7 @@ TRAIN_PARAMS = {
     'FILTER_NUM': 16,
     'LEARNING_RATE': 0.0001,
     'FLAG_GPU': True,
-    'EPOCHS_NUM': 1, 'EPOCH_START': 0,
+    'EPOCHS_NUM': 100, 'EPOCH_START': 0,
     'RANDOM_LEN_INPUT': 0,
     'TRAINING_MODE': 2, #1: do not use step 1 , 2: use step 2
 
@@ -52,15 +52,14 @@ DATA_PARAMS = {
     'FLAG_NOISE': False,
     'FLAG_SHUFFLE': False,
     'INP_IMG_NUM': 1,
-    'REQ_F_IDX':-1, # the index of the focal distance required
+    'REQ_F_IDX':-1, # the index of the focal distance required. -1 for random fdist.
     'FLAG_IO_DATA': {
         'INP_RGB': True,
         'INP_COC': False,
         'INP_AIF': False,
         'INP_DIST':True,
-
-        'OUT_COC': True,
-        'OUT_DEPTH': True,
+        'OUT_COC': True, # model outputs the blur
+        'OUT_DEPTH': True, # model outputs the depth
     },
     'TRAIN_SPLIT': 0.8,
     'DATASET_SHUFFLE': True,
@@ -126,8 +125,10 @@ def train_model(loaders, model_info, forward_pass, TRAIN_PARAMS, DATA_PARAMS):
             X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
             for t in range(stacknum):
                 if DATA_PARAMS['FLAG_IO_DATA']['INP_DIST']:
-                    focus_distance = focus_dists[DATA_PARAMS['REQ_F_IDX']]/focus_dists[-1]
-                    X2_fcs[:, t:(t + 1), :, :] = X2_fcs[:, t:(t + 1), :, :] * (focus_distance)
+                    for i in range(DATA_PARAMS['BATCH_SIZE']):
+                        focus_distance=sample_batch['fdist'][i].item()/focus_dists[-1]
+                        #focus_distance = focus_dists[DATA_PARAMS['REQ_F_IDX']]/focus_dists[-1]
+                        X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance)
             X2_fcs = X2_fcs.float().to(model_info['device_comp'])
 
             # Forward and compute loss
@@ -156,15 +157,7 @@ def train_model(loaders, model_info, forward_pass, TRAIN_PARAMS, DATA_PARAMS):
                 print(model_info['model_name'], 'Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'
                       .format(epoch_iter + 1, TRAIN_PARAMS['EPOCHS_NUM'], st_iter + 1, model_info['total_steps'], loss_sum / iter_count))
                 total_iter = model_info['total_steps'] * epoch_iter + st_iter
-
-                if epoch_iter == TRAIN_PARAMS['EPOCH_START'] and (st_iter + 1) == 5:
-                    viz_info.initial_viz(loss_val=loss_sum / iter_count, viz_out=outputs, viz_gt_img=gt_step2, viz_inp=X, viz_mid=output_step1)
-                else:
-                    viz_info.log_viz_plot(loss_val=loss_sum / iter_count, total_iter=total_iter)
                 loss_sum, iter_count = 0, 0
-                if (st_iter + 1) % 25 == 0:
-                    viz_info.log_viz_img(viz_out=outputs, viz_gt_img=gt_step2, viz_inp=X, viz_mid=output_step1)
-        #viz_info.log_viz_img(viz_out=outputs, viz_gt_img=gt_step2, viz_inp=X, viz_mid=output_step1)
 
         # Save model
         if (epoch_iter + 1) % 10 == 0:
@@ -172,6 +165,7 @@ def train_model(loaders, model_info, forward_pass, TRAIN_PARAMS, DATA_PARAMS):
 
 import importlib
 importlib.reload(util_func_defocusnet)
+util_func_defocusnet.compute_all_metrics(output_step2,Y)
 
 def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):
     # Initial preparations
@@ -217,4 +211,4 @@ def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):
     print("inp_ch_num",inp_ch_num,"   out_ch_num",out_ch_num)
 
     # Run training
-    train_model(loaders=loaders, model_info=model_info, forward_pass=forward_pass)
+    train_model(loaders=loaders, model_info=model_info, forward_pass=forward_pass,TRAIN_PARAMS=TRAIN_PARAMS, DATA_PARAMS=DATA_PARAMS)
