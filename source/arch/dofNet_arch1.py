@@ -159,6 +159,7 @@ class AENet(nn.Module):
                         out = torch.cat([out, out_col], dim=1)
 
         if flag_step2:
+            print('running step 2')
             down2 = []
             pool_temp = []
             for j in range(self.n_blocks + 1):

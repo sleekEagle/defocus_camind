@@ -22,6 +22,7 @@ from PIL import Image
 from skimage import img_as_float
 from skimage import measure
 from scipy import stats
+import random
 
 
 def _abs_val(x):
@@ -81,7 +82,7 @@ class ImageDataset(torch.utils.data.Dataset):
     """Focal place dataset."""
 
     def __init__(self, root_dir, transform_fnc=None, flag_shuffle=False, img_num=1, data_ratio=0,
-                 flag_inputs=[False, False], flag_outputs=[False, False], focus_dist=[0.1,.15,.3,0.7,1.5], f_number=0.1, max_dpt = 3.):
+                 flag_inputs=[False, False], flag_outputs=[False, False], focus_dist=[0.1,.15,.3,0.7,1.5],req_f_indx=0, f_number=0.1, max_dpt = 3.):
         self.root_dir = root_dir
         self.transform_fnc = transform_fnc
         self.flag_shuffle = flag_shuffle
@@ -96,6 +97,7 @@ class ImageDataset(torch.utils.data.Dataset):
         self.flag_out_depth = flag_outputs[1]
 
         self.focus_dist = focus_dist
+        self.req_f_idx=req_f_indx
 
         ##### Load and sort all images
         self.imglist_all = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "All.tif"]
@@ -113,6 +115,11 @@ class ImageDataset(torch.utils.data.Dataset):
         return int(len(self.imglist_dpt))
 
     def __getitem__(self, idx):
+        ### select random focal distance if req_f_idx=-1
+        if(self.req_f_idx==-1):
+            req=random.randint(0,len(self.focus_dist)-1)
+        else:
+            req=self.req_f_idx
         ##### Read and process an image
         idx_dpt = int(idx)
         img_dpt = read_dpt(self.root_dir + self.imglist_dpt[idx_dpt])
@@ -133,20 +140,19 @@ class ImageDataset(torch.utils.data.Dataset):
         mats_input = np.zeros((256, 256, 0))
         mats_output = np.zeros((256, 256, 0))
 
-        for i in range(self.img_num):
-            if self.flag_rgb:
-                im = Image.open(self.root_dir + self.imglist_all[ind + num_list[i]])
-                img_all = np.array(im)
-                mat_all = img_all.copy() / 255.
-                mats_input = np.concatenate((mats_input, mat_all), axis=2)
+        if self.flag_rgb:
+            im = Image.open(self.root_dir + self.imglist_all[ind + req])
+            img_all = np.array(im)
+            mat_all = img_all.copy() / 255.
+            mats_input = np.concatenate((mats_input, mat_all), axis=2)
 
-            if self.flag_coc or self.flag_out_coc:
-                img_msk = self.camera.get_coc(self.focus_dist[i], img_dpt)
-                img_msk = np.clip(img_msk, 0, 1.0e-4) / 1.0e-4
-                mat_msk = img_msk.copy()[:, :, np.newaxis]
-                if self.flag_coc:
-                    mats_input = np.concatenate((mats_input, mat_msk), axis=2)
-                if self.flag_out_coc:
+        if self.flag_coc or self.flag_out_coc:
+            img_msk = self.camera.get_coc(self.focus_dist[req], img_dpt)
+            img_msk = np.clip(img_msk, 0, 1.0e-4) / 1.0e-4
+            mat_msk = img_msk.copy()[:, :, np.newaxis]
+            if self.flag_coc:
+                mats_input = np.concatenate((mats_input, mat_msk), axis=2)
+            if self.flag_out_coc:
                     mats_output = np.concatenate((mats_output, mat_msk), axis=2)
 
         if self.flag_out_depth:
@@ -156,7 +162,7 @@ class ImageDataset(torch.utils.data.Dataset):
 
         if self.transform_fnc:
             sample = self.transform_fnc(sample)
-
+        sample = {'input': sample['input'], 'output': sample['output'],'fdist':self.focus_dist[req]}
         return sample
 
 
@@ -177,13 +183,13 @@ def weights_init(m):
 
 
 def load_data(DATA_PATH, DATA_SET, DATA_NUM, INP_IMG_NUM, FLAG_SHUFFLE, FLAG_IO_DATA, TRAIN_SPLIT,
-              WORKERS_NUM, BATCH_SIZE, DATASET_SHUFFLE, DATA_RATIO_STRATEGY, FOCUS_DIST, F_NUMBER, MAX_DPT):
+              WORKERS_NUM, BATCH_SIZE, DATASET_SHUFFLE, DATA_RATIO_STRATEGY, FOCUS_DIST, REQ_F_IDX,F_NUMBER, MAX_DPT):
     data_dir = DATA_PATH + DATA_SET + str(DATA_NUM) + '/'
     img_dataset = ImageDataset(root_dir=data_dir, transform_fnc=transforms.Compose([ToTensor()]),
                                flag_shuffle=FLAG_SHUFFLE, img_num=INP_IMG_NUM, data_ratio=DATA_RATIO_STRATEGY,
                                flag_inputs=[FLAG_IO_DATA['INP_RGB'], FLAG_IO_DATA['INP_COC']],
                                flag_outputs=[FLAG_IO_DATA['OUT_COC'], FLAG_IO_DATA['OUT_DEPTH']],
-                               focus_dist=FOCUS_DIST, f_number=F_NUMBER, max_dpt=MAX_DPT)
+                               focus_dist=FOCUS_DIST, req_f_indx=REQ_F_IDX,f_number=F_NUMBER, max_dpt=MAX_DPT)
 
     indices = list(range(len(img_dataset)))
     split = int(len(img_dataset) * TRAIN_SPLIT)

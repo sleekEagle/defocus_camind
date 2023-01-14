@@ -29,7 +29,7 @@ TRAIN_PARAMS = {
     'FLAG_GPU': True,
     'EPOCHS_NUM': 1, 'EPOCH_START': 0,
     'RANDOM_LEN_INPUT': 0,
-    'TRAINING_MODE': 1,
+    'TRAINING_MODE': 2, #1: do not use step 1 , 2: use step 2
 
     'MODEL_STEPS': 1,
 
@@ -52,6 +52,7 @@ DATA_PARAMS = {
     'FLAG_NOISE': False,
     'FLAG_SHUFFLE': False,
     'INP_IMG_NUM': 1,
+    'REQ_F_IDX':-1, # the index of the focal distance required
     'FLAG_IO_DATA': {
         'INP_RGB': True,
         'INP_COC': False,
@@ -107,7 +108,6 @@ def train_model(loaders, model_info, forward_pass, TRAIN_PARAMS, DATA_PARAMS):
         loss_sum, iter_count = 0, 0
 
         for st_iter, sample_batch in enumerate(loaders[0]):
-
             # Setting up input and output data
             X = sample_batch['input'].float().to(model_info['device_comp'])
             Y = sample_batch['output'].float().to(model_info['device_comp'])
@@ -126,12 +126,12 @@ def train_model(loaders, model_info, forward_pass, TRAIN_PARAMS, DATA_PARAMS):
             X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
             for t in range(stacknum):
                 if DATA_PARAMS['FLAG_IO_DATA']['INP_DIST']:
-                    focus_distance = focus_dists[t] / focus_dists[-1]
+                    focus_distance = focus_dists[DATA_PARAMS['REQ_F_IDX']]/focus_dists[-1]
                     X2_fcs[:, t:(t + 1), :, :] = X2_fcs[:, t:(t + 1), :, :] * (focus_distance)
             X2_fcs = X2_fcs.float().to(model_info['device_comp'])
 
             # Forward and compute loss
-            output_step1, output_step2 = forward_pass(X, model_info, stacknum=stacknum, additional_input=X2_fcs)
+            output_step1, output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
 
             if TRAIN_PARAMS['TRAINING_MODE'] == 2:
                 loss_step1, loss_step2 = 0, 0
@@ -169,6 +169,7 @@ def train_model(loaders, model_info, forward_pass, TRAIN_PARAMS, DATA_PARAMS):
         # Save model
         if (epoch_iter + 1) % 10 == 0:
             torch.save(model_info['model'].state_dict(), model_info['model_dir'] + model_info['model_name'] + '_ep' + str(0) + '.pth')
+
 import importlib
 importlib.reload(util_func_defocusnet)
 
@@ -181,7 +182,7 @@ def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):
     loaders, total_steps = util_func_defocusnet.load_data(DATA_PARAMS['DATA_PATH'],DATA_PARAMS['DATA_SET'],DATA_PARAMS['DATA_NUM'],
     DATA_PARAMS['INP_IMG_NUM'],DATA_PARAMS['FLAG_SHUFFLE'],DATA_PARAMS['FLAG_IO_DATA'],DATA_PARAMS['TRAIN_SPLIT'],
     DATA_PARAMS['WORKERS_NUM'],DATA_PARAMS['BATCH_SIZE'],DATA_PARAMS['DATASET_SHUFFLE'],DATA_PARAMS['DATA_RATIO_STRATEGY'],
-    DATA_PARAMS['FOCUS_DIST'],
+    DATA_PARAMS['FOCUS_DIST'],DATA_PARAMS['REQ_F_IDX'],
     DATA_PARAMS['F_NUMBER'],DATA_PARAMS['MAX_DPT'])
 
     model, inp_ch_num, out_ch_num = util_func_defocusnet.load_model(model_dir, model_name,TRAIN_PARAMS, DATA_PARAMS)
