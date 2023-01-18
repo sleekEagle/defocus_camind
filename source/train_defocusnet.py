@@ -48,7 +48,7 @@ TRAIN_PARAMS = {
 DATA_PARAMS = {
     'DATA_PATH': 'C:\\Users\\lahir\\focusdata\\fs_6\\',
     'DATA_SET': 'fs_',
-    'DATA_NUM': 6,
+    'DATA_NUM': 7,
     'FLAG_NOISE': False,
     'FLAG_SHUFFLE': False,
     'INP_IMG_NUM': 1,
@@ -185,6 +185,11 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
             torch.save(model_info['model'].state_dict(), model_info['model_dir'] + model_info['model_name'] + '_ep' + str(0) + '.pth')
             mean_mse=eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS)
             print('mean MSE: '+str(mean_mse))
+
+
+
+import importlib
+importlib.reload(util_func_defocusnet)
 
 def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):
     # Initial preparations

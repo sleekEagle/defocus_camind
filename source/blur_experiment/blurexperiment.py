@@ -37,23 +37,56 @@ N5=20
 blur_values5=getblur_pix(s1,s2,f,N5,pixel_size,pixelratio)
 
 plt.hist(blur_values1)
-plt.hist(blur_values4)
-plt.hist(blur_values5)
-plt.show()
+plt.xlabel('blur in pixles')
+plt.ylabel('frequency')
+plt.title('blur when N=1')
+plt.savefig('blur_experiment/N=1.png')
+plt.clf()
 
+plt.hist(blur_values4)
+plt.xlabel('blur in pixles')
+plt.ylabel('frequency')
+plt.title('blur when N=10')
+plt.savefig('blur_experiment/N=10.png')
+plt.clf()
+
+plt.hist(blur_values5)
+plt.xlabel('blur in pixles')
+plt.ylabel('frequency')
+plt.title('blur when N=20')
+plt.savefig('blur_experiment/N=20.png')
+plt.clf()
 
 '''
 Lets multiply blur_pix by camera parameters
 '''
-norm_blur1=blur_values2*pixel_size*(s1-f)*N1/f**2
+norm_blur1=blur_values1*pixel_size*(s1-f)*N1/f**2
 norm_blur2=blur_values2*pixel_size*(s1-f)*N2/f**2
-norm_blur3=blur_values2*pixel_size*(s1-f)*N3/f**2
-norm_blur4=blur_values2*pixel_size*(s1-f)*N4/f**2
-norm_blur5=blur_values2*pixel_size*(s1-f)*N5/f**2
+norm_blur3=blur_values3*pixel_size*(s1-f)*N3/f**2
+norm_blur4=blur_values4*pixel_size*(s1-f)*N4/f**2
+norm_blur5=blur_values5*pixel_size*(s1-f)*N5/f**2
 
 plt.hist(norm_blur1)
+plt.xlabel('blur in pixles')
+plt.ylabel('frequency')
+plt.title('normalized blur when N=1')
+plt.savefig('blur_experiment/N=1_norm.png')
+plt.clf()
+
 plt.hist(norm_blur4)
+plt.xlabel('blur in pixles')
+plt.ylabel('frequency')
+plt.title('normalized blur when N=10')
+plt.savefig('blur_experiment/N=10_norm.png')
+plt.clf()
+
 plt.hist(norm_blur5)
+plt.xlabel('blur in pixles')
+plt.ylabel('frequency')
+plt.title('normalized blur when N=20')
+plt.savefig('blur_experiment/N=20_norm.png')
+plt.clf()
+
 plt.show()
 
 
@@ -64,10 +97,13 @@ nsamples=10000
 s1=np.random.choice([0.1,.15,.3,0.7,1.5], nsamples)
 s2=np.random.uniform(low=0.1, high=3.0, size=(nsamples,))
 N=np.random.uniform(low=1, high=20.0, size=(nsamples,))
-blur_values=getblur_pix(s1,s2,f,N,pixel_size,pixelratio)*1000
+blur_values=getblur_pix(s1,s2,f,N,pixel_size,pixelratio)
 
 plt.hist(blur_values)
-plt.show()
+plt.xlabel('blur in pixles')
+plt.ylabel('frequency')
+plt.title('blur with randomly chosen N')
+plt.savefig('blur_experiment/randomN.png')
 
 
 

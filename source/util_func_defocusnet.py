@@ -126,6 +126,9 @@ class ImageDataset(torch.utils.data.Dataset):
         img_dpt = np.clip(img_dpt, 0., self.max_dpt)
         mat_dpt = img_dpt / self.max_dpt
 
+        #extract N from the file name
+        N=float(self.imglist_dpt[idx_dpt].split('_')[1][1:])
+
         mat_dpt = mat_dpt.copy()[:, :, np.newaxis]
 
         ind = idx * self.img_num
@@ -162,7 +165,7 @@ class ImageDataset(torch.utils.data.Dataset):
 
         if self.transform_fnc:
             sample = self.transform_fnc(sample)
-        sample = {'input': sample['input'], 'output': sample['output'],'fdist':self.focus_dist[req]}
+        sample = {'input': sample['input'], 'output': sample['output'],'fdist':self.focus_dist[req],'N':N}
         return sample
 
 
