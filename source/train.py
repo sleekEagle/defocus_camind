@@ -45,7 +45,7 @@ TRAIN_PARAMS = {
 }
 
 DATA_PARAMS = {
-    'DATA_PATH': 'C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\test\\',
+    'DATA_PATH': 'C:\\Users\\lahir\\focusdata\\fs_6\\',
     'FLAG_NOISE': False,
     'FLAG_SHUFFLE': False,
     'INP_IMG_NUM':1,
