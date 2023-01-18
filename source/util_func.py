@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Wed Aug 29 14:54:12 2018
-
 @author: maximov
 """
 
@@ -21,8 +20,9 @@ import csv
 import OpenEXR, Imath
 from PIL import Image
 from skimage import img_as_float
-from skimage import measure
+from skimage import metrics
 from scipy import stats
+import math
 
 
 def _abs_val(x):
@@ -38,7 +38,7 @@ def read_dpt(img_dpt_path):
     dw = dpt_img.header()['dataWindow']
     size = (dw.max.x - dw.min.x + 1, dw.max.y - dw.min.y + 1)
     (r, g, b) = dpt_img.channels("RGB")
-    dpt = np.frombuffer(r, dtype=np.float16)
+    dpt = np.fromstring(r, dtype=np.float16)
     dpt.shape = (size[1], size[0])
     return dpt
 
@@ -74,23 +74,36 @@ class CameraLens:
         if isinstance(focus_distance, torch.Tensor):
             for _ in range(len(depth.shape) - len(focus_distance.shape)):
                 focus_distance = focus_distance.unsqueeze(-1)
+
         return (_abs_val(depth - focus_distance) / depth) * self._get_indep_fac(focus_distance)
 
 
 class ImageDataset(torch.utils.data.Dataset):
     """Focal place dataset."""
 
-    def __init__(self, root_dir, transform_fnc=None, flag_out_blur=True, f_number=0.1, max_dpt = 3.,normalize=False):
+    def __init__(self, root_dir, transform_fnc=None, flag_shuffle=False, img_num=1, data_ratio=0,
+                 flag_inputs=[False, False], flag_outputs=[False, False], focus_dist=[0.1,.15,.3,0.7,1.5],req_f_indx=0, f_number=0.1, max_dpt = 3.):
         self.root_dir = root_dir
         self.transform_fnc = transform_fnc
-        self.flag_out_blur = flag_out_blur
-        self.normalize=normalize
+        self.flag_shuffle = flag_shuffle
+
+        self.flag_rgb = flag_inputs[0]
+        self.flag_coc = flag_inputs[1]
+
+        self.img_num = img_num
+        self.data_ratio = data_ratio
+
+        self.flag_out_coc = flag_outputs[0]
+        self.flag_out_depth = flag_outputs[1]
+
+        self.focus_dist = focus_dist
+        self.req_f_idx=req_f_indx
 
         ##### Load and sort all images
         self.imglist_all = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "All.tif"]
         self.imglist_dpt = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "Dpt.exr"]
 
-        print("Total number of samples", len(self.imglist_dpt), "  Total number of seqs", len(self.imglist_dpt))
+        print("Total number of samples", len(self.imglist_dpt), "  Total number of seqs", len(self.imglist_dpt) / img_num)
 
         self.imglist_all.sort()
         self.imglist_dpt.sort()
@@ -102,45 +115,58 @@ class ImageDataset(torch.utils.data.Dataset):
         return int(len(self.imglist_dpt))
 
     def __getitem__(self, idx):
-        ##### Read and process the depth image
+        ### select random focal distance if req_f_idx=-1
+        if(self.req_f_idx==-1):
+            req=random.randint(0,len(self.focus_dist)-1)
+        else:
+            req=self.req_f_idx
+        ##### Read and process an image
         idx_dpt = int(idx)
         img_dpt = read_dpt(self.root_dir + self.imglist_dpt[idx_dpt])
-        if(self.normalize):
-            img_dpt = np.clip(img_dpt, 0., self.max_dpt)
-            img_dpt = img_dpt / self.max_dpt
-        mat_dpt = img_dpt.copy()[:, :, np.newaxis]
+        img_dpt = np.clip(img_dpt, 0., self.max_dpt)
+        mat_dpt = img_dpt / self.max_dpt
 
-        ##### Read and process the focused RGB image
-        idx_rgb=int(idx)
-        im = Image.open(self.root_dir + self.imglist_all[idx_rgb])
-        img_all = np.array(im)
-        mat_all = img_all.copy() / 255.
+        #extract N from the file name
+        N=float(self.imglist_dpt[idx_dpt].split('_')[1][1:])
 
-        fdist=float(self.imglist_all[idx_rgb].split('_')[-1][:-7])
+        mat_dpt = mat_dpt.copy()[:, :, np.newaxis]
+
+        ind = idx * self.img_num
+
+        num_list = list(range(self.img_num))
+        if self.data_ratio == 1:
+            num_list = [0, 1, 2, 3, 4]
+        if self.flag_shuffle:
+            random.shuffle(num_list)
 
         # add RGB, CoC, Depth inputs
         mats_input = np.zeros((256, 256, 0))
         mats_output = np.zeros((256, 256, 0))
 
-        mats_input = np.concatenate((mats_input, mat_all), axis=2)
-        if self.flag_out_blur:
-            #### Calculate blur 
-            img_msk = self.camera.get_coc(fdist, img_dpt)
-            if(self.normalize):
-                img_msk = np.clip(img_msk, 0, 1.0e-4) / 1.0e-4
-            mat_msk = img_msk.copy()[:, :, np.newaxis]
-            mats_input = np.concatenate((mats_input, mat_msk), axis=2)
+        if self.flag_rgb:
+            im = Image.open(self.root_dir + self.imglist_all[ind + req])
+            img_all = np.array(im)
+            mat_all = img_all.copy() / 255.
+            mats_input = np.concatenate((mats_input, mat_all), axis=2)
 
-        mats_output = np.concatenate((mats_output, mat_dpt), axis=2)
+        if self.flag_coc or self.flag_out_coc:
+            img_msk = self.camera.get_coc(self.focus_dist[req], img_dpt)
+            img_msk = np.clip(img_msk, 0, 1.0e-4) / 1.0e-4
+            mat_msk = img_msk.copy()[:, :, np.newaxis]
+            if self.flag_coc:
+                mats_input = np.concatenate((mats_input, mat_msk), axis=2)
+            if self.flag_out_coc:
+                    mats_output = np.concatenate((mats_output, mat_msk), axis=2)
+
+        if self.flag_out_depth:
+            mats_output = np.concatenate((mats_output, mat_dpt), axis=2)
 
         sample = {'input': mats_input, 'output': mats_output}
 
         if self.transform_fnc:
             sample = self.transform_fnc(sample)
-
-        output={'input':sample['input'],'output':sample['output'],'fdist':fdist}
-
-        return output
+        sample = {'input': sample['input'], 'output': sample['output'],'fdist':self.focus_dist[req],'N':N}
+        return sample
 
 
 class ToTensor(object):
@@ -158,13 +184,15 @@ def weights_init(m):
         torch.nn.init.xavier_normal(m.weight)
         m.bias.data.fill_(0.01)
 
-data_dir='C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\test\\'
-def load_data(DATA_PATH, TRAIN_SPLIT,flag_out_blur,
-              WORKERS_NUM, BATCH_SIZE, DATASET_SHUFFLE, F_NUMBER, MAX_DPT,NORMALIZE=False):
 
+def load_data(DATA_PATH, DATA_SET, DATA_NUM, INP_IMG_NUM, FLAG_SHUFFLE, FLAG_IO_DATA, TRAIN_SPLIT,
+              WORKERS_NUM, BATCH_SIZE, DATASET_SHUFFLE, DATA_RATIO_STRATEGY, FOCUS_DIST, REQ_F_IDX,F_NUMBER, MAX_DPT):
+    data_dir = DATA_PATH + DATA_SET + str(DATA_NUM) + '/'
     img_dataset = ImageDataset(root_dir=data_dir, transform_fnc=transforms.Compose([ToTensor()]),
-                               flag_out_blur=flag_out_blur,
-                               f_number=F_NUMBER, max_dpt=MAX_DPT,normalize=NORMALIZE)
+                               flag_shuffle=FLAG_SHUFFLE, img_num=INP_IMG_NUM, data_ratio=DATA_RATIO_STRATEGY,
+                               flag_inputs=[FLAG_IO_DATA['INP_RGB'], FLAG_IO_DATA['INP_COC']],
+                               flag_outputs=[FLAG_IO_DATA['OUT_COC'], FLAG_IO_DATA['OUT_DEPTH']],
+                               focus_dist=FOCUS_DIST, req_f_indx=REQ_F_IDX,f_number=F_NUMBER, max_dpt=MAX_DPT)
 
     indices = list(range(len(img_dataset)))
     split = int(len(img_dataset) * TRAIN_SPLIT)
@@ -181,12 +209,13 @@ def load_data(DATA_PATH, TRAIN_SPLIT,flag_out_blur,
     total_steps = int(len(dataset_train) / BATCH_SIZE)
     print("Total number of steps per epoch:", total_steps)
     print("Total number of training sample:", len(dataset_train))
+    print("Total number of validataion sample:", len(dataset_valid))
 
     return [loader_train, loader_valid], total_steps
 
 
-def load_model(model_dir, model_name, TRAIN_PARAMS, DATA_PARAMS,OUTPUT_PARAMS):
-    arch = importlib.import_module('arch.'+OUTPUT_PARAMS['MODEL_NAME'])
+def load_model(model_dir, model_name, TRAIN_PARAMS, DATA_PARAMS):
+    arch = importlib.import_module('arch.dofNet_arch' + str(TRAIN_PARAMS['ARCH_NUM']))
 
     ch_inp_num = 0
     if DATA_PARAMS['FLAG_IO_DATA']['INP_RGB']:
@@ -214,7 +243,7 @@ def load_model(model_dir, model_name, TRAIN_PARAMS, DATA_PARAMS,OUTPUT_PARAMS):
     else:
         model = arch.AENet(total_ch_inp, ch_out_num_all, TRAIN_PARAMS['FILTER_NUM'])
     model.apply(weights_init)
-    
+
     params = list(model.parameters())
     print("model.parameters()", len(params))
     pytorch_total_params = sum(p.numel() for p in model.parameters())
@@ -236,6 +265,18 @@ def set_comp_device(FLAG_GPU):
     return device_comp
 
 
+def set_output_folders(OUTPUT_PARAMS, DATA_PARAMS, TRAIN_PARAMS):
+    model_name = 'a' + str(TRAIN_PARAMS['ARCH_NUM']).zfill(2) + '_d' + str(DATA_PARAMS['DATA_NUM']).zfill(2) + '_t' + str(
+        OUTPUT_PARAMS['EXP_NUM']).zfill(2)
+    res_dir = OUTPUT_PARAMS['RESULT_PATH'] + model_name + '/'
+    models_dir = OUTPUT_PARAMS['MODEL_PATH'] + model_name + '/'
+    if not isdir(models_dir):
+        mkdir(models_dir)
+    if not isdir(res_dir):
+        mkdir(res_dir)
+    return models_dir, model_name, res_dir
+
+
 def compute_loss(Y_est, Y_gt, criterion):
     return criterion(Y_est, Y_gt)
 
@@ -254,7 +295,7 @@ def compute_psnr(img1, img2, mode_limit=False, msk=0):
 
 
 def compute_ssim(mat_est, mat_gt, mode_limit=False, msk=0):
-    ssim_full = measure.compare_ssim((mat_gt), (mat_est), data_range=img_as_float(mat_gt).max() - img_as_float(mat_gt).min(), multichannel=True,
+    ssim_full = metrics.structural_similarity((mat_gt), (mat_est), data_range=img_as_float(mat_gt).max() - img_as_float(mat_gt).min(), channel_axis=-1,
                      full=True)
     if mode_limit:
         ssim_mean = np.sum(ssim_full[1]*msk) / (np.sum(msk))
