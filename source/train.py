@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 """
 Created on Wed Aug 29 14:54:12 2018
-
 @author: maximov
 """
 
@@ -19,45 +18,48 @@ import random
 import math
 from sacred import Experiment
 import csv
-import util_func
+import util_func_defocusnet
+
+
 
 TRAIN_PARAMS = {
-        'ARCH_NUM': 1,
-        'FILTER_NUM': 16,
-        'LEARNING_RATE': 0.0001,
-        'FLAG_GPU': True,
-        'EPOCHS_NUM': 1, 'EPOCH_START': 0,
-        'RANDOM_LEN_INPUT': 0,
-        'TRAINING_MODE': 1,
+    'ARCH_NUM': 1,
+    'FILTER_NUM': 16,
+    'LEARNING_RATE': 0.0001,
+    'FLAG_GPU': True,
+    'EPOCHS_NUM': 100, 'EPOCH_START': 0,
+    'RANDOM_LEN_INPUT': 0,
+    'TRAINING_MODE': 2, #1: do not use step 1 , 2: use step 2
 
-        'MODEL_STEPS': 1,
+    'MODEL_STEPS': 1,
 
-        'MODEL1_LOAD': False,
-        'MODEL1_ARCH_NUM': 44,
-        'MODEL1_NAME': "d01_t01", 'MODEL1_INPUT_NUM': 5,
-        'MODEL1_EPOCH': 1000, 'MODEL1_FILTER_NUM': 16,
-        'MODEL1_LOSS_WEIGHT': 1.,
+    'MODEL1_LOAD': False,
+    'MODEL1_ARCH_NUM': 1,
+    'MODEL1_NAME': "d06_t01", 'MODEL1_INPUT_NUM': 1,
+    'MODEL1_EPOCH': 0, 'MODEL1_FILTER_NUM': 16,
+    'MODEL1_LOSS_WEIGHT': 1.,
 
-        'MODEL2_LOAD': False,
-        'MODEL2_NAME': "a44_d01_t01",
-        'MODEL2_EPOCH': 500,
-        'MODEL2_TRAIN_STEP': True,
+    'MODEL2_LOAD': False,
+    'MODEL2_NAME': "a01_d06_t01",
+    'MODEL2_EPOCH': 500,
+    'MODEL2_TRAIN_STEP': True,
 }
 
 DATA_PARAMS = {
     'DATA_PATH': 'C:\\Users\\lahir\\focusdata\\fs_6\\',
+    'DATA_SET': 'fs_',
+    'DATA_NUM': 7,
     'FLAG_NOISE': False,
     'FLAG_SHUFFLE': False,
-    'INP_IMG_NUM':1,
+    'INP_IMG_NUM': 1,
+    'REQ_F_IDX':-1, # the index of the focal distance required. -1 for random fdist.
     'FLAG_IO_DATA': {
         'INP_RGB': True,
         'INP_COC': False,
         'INP_AIF': False,
         'INP_DIST':True,
-
-        'OUT_COC': False,
-        'OUT_DEPTH': True,
-        'NORMALIZE':True
+        'OUT_COC': True, # model outputs the blur
+        'OUT_DEPTH': True, # model outputs the depth
     },
     'TRAIN_SPLIT': 0.8,
     'DATASET_SHUFFLE': True,
@@ -69,11 +71,9 @@ DATA_PARAMS = {
     'MAX_DPT': 3.,
 }
 
-
 OUTPUT_PARAMS = {
-    'RESULT_DIR': 'C:\\Users\\lahir\\code\\defocus\\results\\',
-    'MODEL_DIR': 'C:\\Users\\lahir\\code\\defocus\\models\\',
-    'MODEL_NAME':'dofNet_arch',
+    'RESULT_PATH': 'C:\\Users\\lahir\\code\\defocus\\results\\',
+    'MODEL_PATH': 'C:\\Users\\lahir\\code\\defocus\\models\\',
     'VIZ_PORT': 8098, 'VIZ_HOSTNAME': "http://localhost", 'VIZ_ENV_NAME':'main',
     'VIZ_SHOW_INPUT': True, 'VIZ_SHOW_MID': True,
     'EXP_NUM': 1,
@@ -93,12 +93,29 @@ def forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS, stacknum=1, additiona
 
     return (outputs[1], outputs[0]) if TRAIN_PARAMS['TRAINING_MODE']==2 else (outputs, outputs)
 
-import importlib
-importlib.reload(util_func)
-import matplotlib.pyplot as plt
+def eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS):
+    mse_ar=[]
+    for st_iter, sample_batch in enumerate(loaders[1]):
+        X = sample_batch['input'].float().to(model_info['device_comp'])
+        Y = sample_batch['output'].float().to(model_info['device_comp'])
+        if TRAIN_PARAMS['TRAINING_MODE'] == 2:
+            gt_step1 = Y[:, :-1, :, :]
+            gt_step2 = Y[:, -1:, :, :]
+        stacknum = DATA_PARAMS['INP_IMG_NUM']
+        focus_dists = DATA_PARAMS['FOCUS_DIST']
+        X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
+        for t in range(stacknum):
+            if DATA_PARAMS['FLAG_IO_DATA']['INP_DIST']:
+                focus_distance=sample_batch['fdist'][0].item()/focus_dists[-1]
+                #focus_distance = focus_dists[DATA_PARAMS['REQ_F_IDX']]/focus_dists[-1]
+                X2_fcs[0, t:(t + 1), :, :] = X2_fcs[0, t:(t + 1), :, :] * (focus_distance)
+        X2_fcs = X2_fcs.float().to(model_info['device_comp'])
+        output_step1, output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
+        mse_val, ssim_val, psnr_val=util_func_defocusnet.compute_all_metrics(output_step2,gt_step2)
+        mse_ar.append(mse_val)
+    return sum(mse_ar)/len(loaders[1]) 
 
-
-def train_model(loaders, model_info, forward_pass, TRAIN_PARAMS, DATA_PARAMS):
+def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
     criterion = torch.nn.MSELoss()
     optimizer = optim.Adam(model_info['model_params'], lr=TRAIN_PARAMS['LEARNING_RATE'])
 
@@ -111,7 +128,6 @@ def train_model(loaders, model_info, forward_pass, TRAIN_PARAMS, DATA_PARAMS):
         loss_sum, iter_count = 0, 0
 
         for st_iter, sample_batch in enumerate(loaders[0]):
-            
             # Setting up input and output data
             X = sample_batch['input'].float().to(model_info['device_comp'])
             Y = sample_batch['output'].float().to(model_info['device_comp'])
@@ -130,8 +146,10 @@ def train_model(loaders, model_info, forward_pass, TRAIN_PARAMS, DATA_PARAMS):
             X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
             for t in range(stacknum):
                 if DATA_PARAMS['FLAG_IO_DATA']['INP_DIST']:
-                    focus_distance = focus_dists[t] / focus_dists[-1]
-                    X2_fcs[:, t:(t + 1), :, :] = X2_fcs[:, t:(t + 1), :, :] * (focus_distance)
+                    for i in range(DATA_PARAMS['BATCH_SIZE']):
+                        focus_distance=sample_batch['fdist'][i].item()/focus_dists[-1]
+                        #focus_distance = focus_dists[DATA_PARAMS['REQ_F_IDX']]/focus_dists[-1]
+                        X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance)
             X2_fcs = X2_fcs.float().to(model_info['device_comp'])
 
             # Forward and compute loss
@@ -160,31 +178,32 @@ def train_model(loaders, model_info, forward_pass, TRAIN_PARAMS, DATA_PARAMS):
                 print(model_info['model_name'], 'Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'
                       .format(epoch_iter + 1, TRAIN_PARAMS['EPOCHS_NUM'], st_iter + 1, model_info['total_steps'], loss_sum / iter_count))
                 total_iter = model_info['total_steps'] * epoch_iter + st_iter
-
-                if epoch_iter == TRAIN_PARAMS['EPOCH_START'] and (st_iter + 1) == 5:
-                    viz_info.initial_viz(loss_val=loss_sum / iter_count, viz_out=outputs, viz_gt_img=gt_step2, viz_inp=X, viz_mid=output_step1)
-                else:
-                    viz_info.log_viz_plot(loss_val=loss_sum / iter_count, total_iter=total_iter)
                 loss_sum, iter_count = 0, 0
-                if (st_iter + 1) % 25 == 0:
-                    viz_info.log_viz_img(viz_out=outputs, viz_gt_img=gt_step2, viz_inp=X, viz_mid=output_step1)
-        #viz_info.log_viz_img(viz_out=outputs, viz_gt_img=gt_step2, viz_inp=X, viz_mid=output_step1)
 
         # Save model
         if (epoch_iter + 1) % 10 == 0:
             torch.save(model_info['model'].state_dict(), model_info['model_dir'] + model_info['model_name'] + '_ep' + str(0) + '.pth')
+            mean_mse=eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS)
+            print('mean MSE: '+str(mean_mse))
 
-def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):    
+
+
+import importlib
+importlib.reload(util_func_defocusnet)
+
+def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):
     # Initial preparations
-    model_dir, model_name, res_dir=OUTPUT_PARAMS['MODEL_DIR'],OUTPUT_PARAMS['MODEL_NAME']+str(TRAIN_PARAMS['ARCH_NUM']),OUTPUT_PARAMS['RESULT_DIR']
-    device_comp =  util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
+    model_dir, model_name, res_dir = util_func_defocusnet.set_output_folders(OUTPUT_PARAMS, DATA_PARAMS, TRAIN_PARAMS)
+    device_comp = util_func_defocusnet.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
 
     # Training initializations
-    loaders, total_steps = util_func.load_data(DATA_PARAMS['DATA_PATH'],DATA_PARAMS['TRAIN_SPLIT'],DATA_PARAMS['FLAG_IO_DATA']['OUT_COC'],
-    DATA_PARAMS['WORKERS_NUM'],DATA_PARAMS['BATCH_SIZE'],DATA_PARAMS['DATASET_SHUFFLE'],
-    DATA_PARAMS['F_NUMBER'],DATA_PARAMS['MAX_DPT'],DATA_PARAMS['FLAG_IO_DATA']['NORMALIZE'])
+    loaders, total_steps = util_func_defocusnet.load_data(DATA_PARAMS['DATA_PATH'],DATA_PARAMS['DATA_SET'],DATA_PARAMS['DATA_NUM'],
+    DATA_PARAMS['INP_IMG_NUM'],DATA_PARAMS['FLAG_SHUFFLE'],DATA_PARAMS['FLAG_IO_DATA'],DATA_PARAMS['TRAIN_SPLIT'],
+    DATA_PARAMS['WORKERS_NUM'],DATA_PARAMS['BATCH_SIZE'],DATA_PARAMS['DATASET_SHUFFLE'],DATA_PARAMS['DATA_RATIO_STRATEGY'],
+    DATA_PARAMS['FOCUS_DIST'],DATA_PARAMS['REQ_F_IDX'],
+    DATA_PARAMS['F_NUMBER'],DATA_PARAMS['MAX_DPT'])
 
-    model, inp_ch_num, out_ch_num = util_func.load_model(model_dir, model_name,TRAIN_PARAMS, DATA_PARAMS)
+    model, inp_ch_num, out_ch_num = util_func_defocusnet.load_model(model_dir, model_name,TRAIN_PARAMS, DATA_PARAMS)
     model = model.to(device=device_comp)
     model_params = model.parameters()
 
@@ -214,6 +233,8 @@ def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):
                   'model_params': model_params,
                   }
     print("inp_ch_num",inp_ch_num,"   out_ch_num",out_ch_num)
-    # Run training
-    train_model(loaders=loaders, model_info=model_info, forward_pass=forward_pass)
 
+    # Run training
+    train_model(loaders=loaders, model_info=model_info,TRAIN_PARAMS=TRAIN_PARAMS, DATA_PARAMS=DATA_PARAMS)
+
+run_exp(TRAIN_PARAMS,OUTPUT_PARAMS)
