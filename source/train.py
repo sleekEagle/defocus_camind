@@ -23,7 +23,7 @@ import util_func_defocusnet
 
 
 TRAIN_PARAMS = {
-    'ARCH_NUM': 1,
+    'ARCH_NUM': 3,
     'FILTER_NUM': 16,
     'LEARNING_RATE': 0.0001,
     'FLAG_GPU': True,
@@ -64,7 +64,7 @@ DATA_PARAMS = {
     'TRAIN_SPLIT': 0.8,
     'DATASET_SHUFFLE': True,
     'WORKERS_NUM': 4,
-    'BATCH_SIZE': 16,
+    'BATCH_SIZE': 4,
     'DATA_RATIO_STRATEGY': 0,
     'FOCUS_DIST': [0.1,.15,.3,0.7,1.5],
     'F_NUMBER': 1.,
@@ -79,7 +79,6 @@ OUTPUT_PARAMS = {
     'EXP_NUM': 1,
     'COMMENT': "Default",
 }
-
 
 def forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS, stacknum=1, additional_input=None):
     #to train with random number of inputs
@@ -142,14 +141,19 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
                 stacknum = np.random.randint(1, DATA_PARAMS['INP_IMG_NUM'])
             Y = Y[:, :stacknum, :, :]
 
-            # Focus distance maps
+            '''
+            convert blur_pix that is being estimated by the model
+            into
+            |s2-s1|/s1  by multiplying blur_pix_est by (s1-f)/kcam
+            which is camera independent because it only depends on the distances; not on camera parameters.
+            Also see dofNet_arch3.py comments on the calculations
+            '''
             X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
             for t in range(stacknum):
                 if DATA_PARAMS['FLAG_IO_DATA']['INP_DIST']:
                     for i in range(DATA_PARAMS['BATCH_SIZE']):
-                        focus_distance=sample_batch['fdist'][i].item()/focus_dists[-1]
-                        #focus_distance = focus_dists[DATA_PARAMS['REQ_F_IDX']]/focus_dists[-1]
-                        X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance)
+                        focus_distance=sample_batch['fdist'][i].item()
+                        X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())/sample_batch['kcam'][i].item()
             X2_fcs = X2_fcs.float().to(model_info['device_comp'])
 
             # Forward and compute loss

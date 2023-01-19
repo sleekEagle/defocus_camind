@@ -24,6 +24,20 @@ from skimage import metrics
 from scipy import stats
 import math
 
+#define the parameters of the camera that is used to generate the dataset
+CAM_PARAMS = {
+    'N':-1,#F-number if -1, read this from the images
+    'p':1.1328e-5, #pixel size in m
+    'f':2.9e-3, #focal length in m
+    '''
+    we assume the ratio between the size (in pixels) of sensor and output image
+    is the same in legth and width.
+    So either values along either legth or width should work for the following values.`
+    '''
+    'sen_pix':256, #number of pixels in the sensor(either length or width)
+    'out_pix':256 #number of pixels in the output image (either length or width)
+}
+
 
 def _abs_val(x):
     if isinstance(x, np.ndarray) or isinstance(x, float) or isinstance(x, int):
@@ -127,7 +141,8 @@ class ImageDataset(torch.utils.data.Dataset):
         mat_dpt = img_dpt / self.max_dpt
 
         #extract N from the file name
-        N=float(self.imglist_dpt[idx_dpt].split('_')[1][1:])
+        kcam=float(self.imglist_dpt[idx_dpt].split('_')[1])
+        f=float(self.imglist_dpt[idx_dpt].split('_')[2])
 
         mat_dpt = mat_dpt.copy()[:, :, np.newaxis]
 
@@ -165,7 +180,7 @@ class ImageDataset(torch.utils.data.Dataset):
 
         if self.transform_fnc:
             sample = self.transform_fnc(sample)
-        sample = {'input': sample['input'], 'output': sample['output'],'fdist':self.focus_dist[req],'N':N}
+        sample = {'input': sample['input'], 'output': sample['output'],'fdist':self.focus_dist[req],'kcam':kcam,'f':f*1e-3}
         return sample
 
 

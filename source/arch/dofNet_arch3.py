@@ -3,6 +3,18 @@
 
 '''
 dofNet_arch1 modify to be camera independent
+
+blur_pix=|s2-s1|/s2 * f^2/[N(s1-f)] * 1/p * out_pix/sensor_pix
+blur_pix=|s2-s1|/s2 * Kcam/(s1-f)
+where kcam=f^2/N * 1/p * out_pix/sensor_pix
+
+p - pixel size mm
+sensor_pix - number of pixels in the sensor
+out_pix - number of pixels in the output image
+* these 2 can be different from each other due to things like pixel binning
+Imagine a model can estimate the blur_pix given a defocused (focused) image
+This is named blur_pix_est
+|s2-s1|/s1 = blur_pix_est * (s1-f)/kcam
 '''
 
 import torch
