@@ -194,6 +194,7 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
 
 import importlib
 importlib.reload(util_func_defocusnet)
+importlib.reload(util_func_defocusnet)
 
 def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):
     # Initial preparations
