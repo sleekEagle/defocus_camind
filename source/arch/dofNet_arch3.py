@@ -178,6 +178,7 @@ class AENet(nn.Module):
                         joint_pool = torch.cat([pool_temp[0], pool_max[0]], dim=1)
                         pool_temp.pop(0)
                     else:
+                        #multiply the estimated blur_pix by (s1-f)/kcam
                         joint_pool = out[:, 1 * i:1 * (i + 1), :, :]*x2[:, 1 * i:1 * (i + 1), :, :]
                     print('joint_pool : '+str(joint_pool.shape))
                     conv = self.__getattr__('conv_down2_' + str(j + 0))(joint_pool)
