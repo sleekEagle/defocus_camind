@@ -78,11 +78,14 @@ class CameraLens:
         return (_abs_val(depth - focus_distance) / depth) * self._get_indep_fac(focus_distance)
 
 
+root_dir='C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\fs_1\\'
+
 class ImageDataset(torch.utils.data.Dataset):
     """Focal place dataset."""
 
     def __init__(self, root_dir, transform_fnc=None, flag_shuffle=False, img_num=1, data_ratio=0,
-                 flag_inputs=[False, False], flag_outputs=[False, False], focus_dist=[0.1,.15,.3,0.7,1.5],req_f_indx=0, f_number=0.1, max_dpt = 3.):
+                 flag_inputs=[False, False], flag_outputs=[False, False], focus_dist=[0.1,.15,.3,0.7,1.5,1000000],req_f_indx=-1, 
+                 allif=True,f_number=0.1, f=2.9e-3,max_dpt = 3.):
         self.root_dir = root_dir
         self.transform_fnc = transform_fnc
         self.flag_shuffle = flag_shuffle
@@ -100,15 +103,17 @@ class ImageDataset(torch.utils.data.Dataset):
         self.req_f_idx=req_f_indx
 
         ##### Load and sort all images
-        self.imglist_all = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "All.tif"]
-        self.imglist_dpt = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "Dpt.exr"]
+        imglist_all = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "All.tif"]
+        imglist_dpt = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "Dpt.exr"]
+        imglist_allif = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "Aif.tif"]
 
         print("Total number of samples", len(self.imglist_dpt), "  Total number of seqs", len(self.imglist_dpt) / img_num)
 
         self.imglist_all.sort()
         self.imglist_dpt.sort()
+        self.imglist_allif.sort()
 
-        self.camera = CameraLens(2.9 * 1e-3, f_number=f_number)
+        self.camera = CameraLens(f, f_number=f_number)
         self.max_dpt = max_dpt
 
     def __len__(self):
