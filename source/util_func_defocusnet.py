@@ -91,20 +91,27 @@ class CameraLens:
 
         return (_abs_val(depth - focus_distance) / depth) * self._get_indep_fac(focus_distance)
 
-
+'''
+All in-focus image is attached to the input matrix after the RGB image
+input matrix channles 0:3 - RGB image
+                      3:6 - all in-focus image
+'''
 class ImageDataset(torch.utils.data.Dataset):
     """Focal place dataset."""
 
-    def __init__(self, root_dir, transform_fnc=None, flag_shuffle=False, img_num=1, data_ratio=0,
-                 flag_inputs=[False, False], flag_outputs=[False, False], focus_dist=[0.1,.15,.3,0.7,1.5],req_f_indx=0, f_number=0.1, max_dpt = 3.):
+    def __init__(self, root_dir, transform_fnc=None, flag_shuffle=False, data_ratio=0,
+                 flag_inputs=[True, False,True], flag_outputs=[True, True], focus_dist=[0.1,.15,.3,0.7,1.5,100000],
+                 f=2.9e-3,req_f_indx=0, f_number=0.1, max_dpt = 3.):
+
         self.root_dir = root_dir
         self.transform_fnc = transform_fnc
         self.flag_shuffle = flag_shuffle
 
         self.flag_rgb = flag_inputs[0]
         self.flag_coc = flag_inputs[1]
+        self.flag_aif = flag_inputs[2]
 
-        self.img_num = img_num
+        self.img_num = len(focus_dist)
         self.data_ratio = data_ratio
 
         self.flag_out_coc = flag_outputs[0]
@@ -116,13 +123,15 @@ class ImageDataset(torch.utils.data.Dataset):
         ##### Load and sort all images
         self.imglist_all = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "All.tif"]
         self.imglist_dpt = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "Dpt.exr"]
+        self.imglist_allif = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "Aif.tif"]
 
-        print("Total number of samples", len(self.imglist_dpt), "  Total number of seqs", len(self.imglist_dpt) / img_num)
+        print("Total number of samples", len(self.imglist_dpt), "  Total number of seqs", len(self.imglist_dpt) / self.img_num)
 
         self.imglist_all.sort()
         self.imglist_dpt.sort()
+        self.imglist_allif.sort()
 
-        self.camera = CameraLens(2.9 * 1e-3, f_number=f_number)
+        self.camera = CameraLens(f, f_number=f_number)
         self.max_dpt = max_dpt
 
     def __len__(self):
@@ -163,6 +172,12 @@ class ImageDataset(torch.utils.data.Dataset):
             img_all = np.array(im)
             mat_all = img_all.copy() / 255.
             mats_input = np.concatenate((mats_input, mat_all), axis=2)
+        #if all in-focus image is also needed append that to the input matrix
+        if self.flag_aif:
+            im = Image.open(self.root_dir + self.imglist_allif[idx])
+            img_all = np.array(im)
+            mat_all = img_all.copy() / 255.
+            mats_input = np.concatenate((mats_input, mat_all), axis=2)
 
         if self.flag_coc or self.flag_out_coc:
             img_msk = self.camera.get_coc(self.focus_dist[req], img_dpt)
@@ -171,7 +186,7 @@ class ImageDataset(torch.utils.data.Dataset):
             if self.flag_coc:
                 mats_input = np.concatenate((mats_input, mat_msk), axis=2)
             if self.flag_out_coc:
-                    mats_output = np.concatenate((mats_output, mat_msk), axis=2)
+                mats_output = np.concatenate((mats_output, mat_msk), axis=2)
 
         if self.flag_out_depth:
             mats_output = np.concatenate((mats_output, mat_dpt), axis=2)
@@ -200,12 +215,12 @@ def weights_init(m):
         m.bias.data.fill_(0.01)
 
 
-def load_data(DATA_PATH, DATA_SET, DATA_NUM, INP_IMG_NUM, FLAG_SHUFFLE, FLAG_IO_DATA, TRAIN_SPLIT,
+def load_data(DATA_PATH, DATA_SET, DATA_NUM, FLAG_SHUFFLE, FLAG_IO_DATA, TRAIN_SPLIT,
               WORKERS_NUM, BATCH_SIZE, DATASET_SHUFFLE, DATA_RATIO_STRATEGY, FOCUS_DIST, REQ_F_IDX,F_NUMBER, MAX_DPT):
     data_dir = DATA_PATH + DATA_SET + str(DATA_NUM) + '/'
     img_dataset = ImageDataset(root_dir=data_dir, transform_fnc=transforms.Compose([ToTensor()]),
-                               flag_shuffle=FLAG_SHUFFLE, img_num=INP_IMG_NUM, data_ratio=DATA_RATIO_STRATEGY,
-                               flag_inputs=[FLAG_IO_DATA['INP_RGB'], FLAG_IO_DATA['INP_COC']],
+                               flag_shuffle=FLAG_SHUFFLE, data_ratio=DATA_RATIO_STRATEGY,
+                               flag_inputs=[FLAG_IO_DATA['INP_RGB'], FLAG_IO_DATA['INP_COC'],FLAG_IO_DATA['INP_AIF']],
                                flag_outputs=[FLAG_IO_DATA['OUT_COC'], FLAG_IO_DATA['OUT_DEPTH']],
                                focus_dist=FOCUS_DIST, req_f_indx=REQ_F_IDX,f_number=F_NUMBER, max_dpt=MAX_DPT)
 

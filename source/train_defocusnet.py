@@ -14,13 +14,7 @@ from torchvision import transforms, utils
 
 import numpy as np
 import importlib
-import random
-import math
-from sacred import Experiment
-import csv
 import util_func_defocusnet
-
-
 
 TRAIN_PARAMS = {
     'ARCH_NUM': 1,
@@ -46,18 +40,18 @@ TRAIN_PARAMS = {
 }
 
 DATA_PARAMS = {
-    'DATA_PATH': 'C:\\Users\\lahir\\focusdata\\fs_6\\',
+    'DATA_PATH': 'C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\',
     'DATA_SET': 'fs_',
-    'DATA_NUM': 7,
+    'DATA_NUM': 'training',
     'FLAG_NOISE': False,
     'FLAG_SHUFFLE': False,
     'INP_IMG_NUM': 1,
-    'REQ_F_IDX':-1, # the index of the focal distance required. -1 for random fdist.
+    'REQ_F_IDX':-1, # the index of the focal distance aquired from the dataset. -1 for random fdist.
     'FLAG_IO_DATA': {
         'INP_RGB': True,
         'INP_COC': False,
-        'INP_AIF': False,
-        'INP_DIST':True,
+        'INP_AIF': True,
+        'INP_DIST':False,
         'OUT_COC': True, # model outputs the blur
         'OUT_DEPTH': True, # model outputs the depth
     },
@@ -66,7 +60,7 @@ DATA_PARAMS = {
     'WORKERS_NUM': 4,
     'BATCH_SIZE': 16,
     'DATA_RATIO_STRATEGY': 0,
-    'FOCUS_DIST': [0.1,.15,.3,0.7,1.5],
+    'FOCUS_DIST': [0.1,.15,.3,0.7,1.5,1000000],
     'F_NUMBER': 1.,
     'MAX_DPT': 3.,
 }
@@ -115,6 +109,7 @@ def eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS):
         mse_ar.append(mse_val)
     return sum(mse_ar)/len(loaders[1]) 
 
+
 def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
     criterion = torch.nn.MSELoss()
     optimizer = optim.Adam(model_info['model_params'], lr=TRAIN_PARAMS['LEARNING_RATE'])
@@ -132,7 +127,8 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
             X = sample_batch['input'].float().to(model_info['device_comp'])
             Y = sample_batch['output'].float().to(model_info['device_comp'])
             optimizer.zero_grad()
-
+            #discard AIF image
+            X=X[:,:3,:,:]
             if TRAIN_PARAMS['TRAINING_MODE'] == 2:
                 gt_step1 = Y[:, :-1, :, :]
                 gt_step2 = Y[:, -1:, :, :]
@@ -186,19 +182,14 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
             mean_mse=eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS)
             print('mean MSE: '+str(mean_mse))
 
-
-
-import importlib
-importlib.reload(util_func_defocusnet)
-
-def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):
+def main():
     # Initial preparations
     model_dir, model_name, res_dir = util_func_defocusnet.set_output_folders(OUTPUT_PARAMS, DATA_PARAMS, TRAIN_PARAMS)
     device_comp = util_func_defocusnet.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
 
     # Training initializations
     loaders, total_steps = util_func_defocusnet.load_data(DATA_PARAMS['DATA_PATH'],DATA_PARAMS['DATA_SET'],DATA_PARAMS['DATA_NUM'],
-    DATA_PARAMS['INP_IMG_NUM'],DATA_PARAMS['FLAG_SHUFFLE'],DATA_PARAMS['FLAG_IO_DATA'],DATA_PARAMS['TRAIN_SPLIT'],
+    DATA_PARAMS['FLAG_SHUFFLE'],DATA_PARAMS['FLAG_IO_DATA'],DATA_PARAMS['TRAIN_SPLIT'],
     DATA_PARAMS['WORKERS_NUM'],DATA_PARAMS['BATCH_SIZE'],DATA_PARAMS['DATASET_SHUFFLE'],DATA_PARAMS['DATA_RATIO_STRATEGY'],
     DATA_PARAMS['FOCUS_DIST'],DATA_PARAMS['REQ_F_IDX'],
     DATA_PARAMS['F_NUMBER'],DATA_PARAMS['MAX_DPT'])
@@ -237,4 +228,5 @@ def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):
     # Run training
     train_model(loaders=loaders, model_info=model_info,TRAIN_PARAMS=TRAIN_PARAMS, DATA_PARAMS=DATA_PARAMS)
 
-run_exp(TRAIN_PARAMS,OUTPUT_PARAMS)
+if __name__ == "__main__":
+    main()
