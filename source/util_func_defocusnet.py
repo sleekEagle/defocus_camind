@@ -21,7 +21,7 @@ import OpenEXR, Imath
 from PIL import Image
 from skimage import img_as_float
 import skimage
-if(skimage.__version__ > '0.18'):
+if(skimage.__version__ >= '0.18'):
     from skimage import metrics
 else:
     from skimage import measure
@@ -99,13 +99,18 @@ class CameraLens:
 All in-focus image is attached to the input matrix after the RGB image
 input matrix channles 0:3 - RGB image
                       3:6 - all in-focus image
+
+focus_dist - available focal dists in the dataset
+req_f_indx - a list of focal dists we require. a focal dist is chosen at random each time 
 '''
+
+root_dir='C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\fs_training\\'
 class ImageDataset(torch.utils.data.Dataset):
     """Focal place dataset."""
 
     def __init__(self, root_dir, transform_fnc=None, flag_shuffle=False, data_ratio=0,
                  flag_inputs=[True, False,True], flag_outputs=[True, True], focus_dist=[0.1,.15,.3,0.7,1.5,100000],
-                 f=2.9e-3,req_f_indx=0, f_number=0.1, max_dpt = 3.):
+                 f=2.9e-3,req_f_indx=[0,2], f_number=0.1, max_dpt = 3.):
 
         self.root_dir = root_dir
         self.transform_fnc = transform_fnc
@@ -142,11 +147,12 @@ class ImageDataset(torch.utils.data.Dataset):
         return int(len(self.imglist_dpt))
 
     def __getitem__(self, idx):
-        ### select random focal distance if req_f_idx=-1
-        if(self.req_f_idx==-1):
+        ### select random focal distance if req_f_idx is empty list
+        if(len(self.req_f_idx)==0):
             req=random.randint(0,len(self.focus_dist)-1)
         else:
-            req=self.req_f_idx
+            req=random.choice(self.req_f_idx)
+
         ##### Read and process an image
         idx_dpt = int(idx)
         img_dpt = read_dpt(self.root_dir + self.imglist_dpt[idx_dpt])
@@ -160,12 +166,6 @@ class ImageDataset(torch.utils.data.Dataset):
         mat_dpt = mat_dpt.copy()[:, :, np.newaxis]
 
         ind = idx * self.img_num
-
-        num_list = list(range(self.img_num))
-        if self.data_ratio == 1:
-            num_list = [0, 1, 2, 3, 4]
-        if self.flag_shuffle:
-            random.shuffle(num_list)
 
         # add RGB, CoC, Depth inputs
         mats_input = np.zeros((256, 256, 0))
@@ -329,7 +329,7 @@ def compute_psnr(img1, img2, mode_limit=False, msk=0):
 
 
 def compute_ssim(mat_est, mat_gt, mode_limit=False, msk=0):
-    if(skimage.__version__ > '0.18'):
+    if(skimage.__version__ >= '0.18'):
         ssim_full = metrics.structural_similarity((mat_gt), (mat_est), data_range=img_as_float(mat_gt).max() - img_as_float(mat_gt).min(), channel_axis=-1,
                      full=True)
     else:

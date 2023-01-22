@@ -46,11 +46,11 @@ DATA_PARAMS = {
     'FLAG_NOISE': False,
     'FLAG_SHUFFLE': False,
     'INP_IMG_NUM': 1,
-    'REQ_F_IDX':-1, # the index of the focal distance aquired from the dataset. -1 for random fdist.
+    'REQ_F_IDX': [3], # list of indices of the focal distance aquired from the dataset. [] for random fdist.
     'FLAG_IO_DATA': {
         'INP_RGB': True,
         'INP_COC': False,
-        'INP_AIF': True,
+        'INP_AIF': False,
         'INP_DIST':False,
         'OUT_COC': True, # model outputs the blur
         'OUT_DEPTH': True, # model outputs the depth
@@ -100,9 +100,9 @@ def eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS):
         X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
         for t in range(stacknum):
             if DATA_PARAMS['FLAG_IO_DATA']['INP_DIST']:
-                focus_distance=sample_batch['fdist'][0].item()/focus_dists[-1]
-                #focus_distance = focus_dists[DATA_PARAMS['REQ_F_IDX']]/focus_dists[-1]
-                X2_fcs[0, t:(t + 1), :, :] = X2_fcs[0, t:(t + 1), :, :] * (focus_distance)
+                for i in range(DATA_PARAMS['BATCH_SIZE']):
+                    focus_distance=sample_batch['fdist'][i].item()/1.5
+                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance)
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         output_step1, output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
         mse_val, ssim_val, psnr_val=util_func_defocusnet.compute_all_metrics(output_step2,gt_step2)
@@ -137,14 +137,13 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
             if TRAIN_PARAMS['RANDOM_LEN_INPUT'] > 0:
                 stacknum = np.random.randint(1, DATA_PARAMS['INP_IMG_NUM'])
             Y = Y[:, :stacknum, :, :]
-
+            
             # Focus distance maps
             X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
             for t in range(stacknum):
                 if DATA_PARAMS['FLAG_IO_DATA']['INP_DIST']:
                     for i in range(DATA_PARAMS['BATCH_SIZE']):
-                        focus_distance=sample_batch['fdist'][i].item()/focus_dists[-1]
-                        #focus_distance = focus_dists[DATA_PARAMS['REQ_F_IDX']]/focus_dists[-1]
+                        focus_distance=sample_batch['fdist'][i].item()/1.5
                         X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance)
             X2_fcs = X2_fcs.float().to(model_info['device_comp'])
 
