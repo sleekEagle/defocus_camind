@@ -20,7 +20,11 @@ import csv
 import OpenEXR, Imath
 from PIL import Image
 from skimage import img_as_float
-from skimage import metrics
+import skimage
+if(skimage.__version__ > '0.18'):
+    from skimage import metrics
+else:
+    from skimage import measure
 from scipy import stats
 import math
 
@@ -325,7 +329,11 @@ def compute_psnr(img1, img2, mode_limit=False, msk=0):
 
 
 def compute_ssim(mat_est, mat_gt, mode_limit=False, msk=0):
-    ssim_full = metrics.structural_similarity((mat_gt), (mat_est), data_range=img_as_float(mat_gt).max() - img_as_float(mat_gt).min(), channel_axis=-1,
+    if(skimage.__version__ > '0.18'):
+        ssim_full = metrics.structural_similarity((mat_gt), (mat_est), data_range=img_as_float(mat_gt).max() - img_as_float(mat_gt).min(), channel_axis=-1,
+                     full=True)
+    else:
+        ssim_full = measure.compare_ssim((mat_gt), (mat_est), data_range=img_as_float(mat_gt).max() - img_as_float(mat_gt).min(), multichannel=True,
                      full=True)
     if mode_limit:
         ssim_mean = np.sum(ssim_full[1]*msk) / (np.sum(msk))
