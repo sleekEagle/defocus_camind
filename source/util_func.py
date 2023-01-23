@@ -20,7 +20,11 @@ import csv
 import OpenEXR, Imath
 from PIL import Image
 from skimage import img_as_float
-from skimage import metrics
+import skimage
+if(skimage.__version__ >= '0.18'):
+    from skimage import metrics
+else:
+    from skimage import measure
 from scipy import stats
 import math
 
@@ -43,57 +47,39 @@ def read_dpt(img_dpt_path):
     return dpt
 
 # to calculate circle of confusion
-class CameraLens:
-    def __init__(self, focal_length, sensor_size_full=(0, 0), resolution=(1, 1), aperture_diameter=None, f_number=None, depth_scale=1):
-        self.focal_length = focal_length
-        self.depth_scale = depth_scale
-        self.sensor_size_full = sensor_size_full
+'''
+output |s2-s1|/s2
+'''
+def get_blur(s1,s2):
+    blur=abs(s2-s1)/s2
+    return blur/150.
 
-        if aperture_diameter is not None:
-            self.aperture_diameter = aperture_diameter
-            self.f_number = (focal_length / aperture_diameter) if aperture_diameter != 0 else 0
-        else:
-            self.f_number = f_number
-            self.aperture_diameter = focal_length / f_number
+'''
+All in-focus image is attached to the input matrix after the RGB image
+input matrix channles 0:3 - RGB image
+                      3:6 - all in-focus image
 
-        if self.sensor_size_full is not None:
-            self.resolution = resolution
-            self.aspect_ratio = resolution[0] / resolution[1]
-            self.sensor_size = [self.sensor_size_full[0], self.sensor_size_full[0] / self.aspect_ratio]
-        else:
-            self.resolution = None
-            self.aspect_ratio = None
-            self.sensor_size = None
-            self.fov = None
-            self.focal_length_pixel = None
+focus_dist - available focal dists in the dataset
+req_f_indx - a list of focal dists we require. a focal dist is chosen at random each time 
+'''
 
-    def _get_indep_fac(self, focus_distance):
-        return (self.aperture_diameter * self.focal_length) / (focus_distance - self.focal_length)
-
-    def get_coc(self, focus_distance, depth):
-        if isinstance(focus_distance, torch.Tensor):
-            for _ in range(len(depth.shape) - len(focus_distance.shape)):
-                focus_distance = focus_distance.unsqueeze(-1)
-
-        return (_abs_val(depth - focus_distance) / depth) * self._get_indep_fac(focus_distance)
-
-
-root_dir='C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\fs_1\\'
-
+root_dir='C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\fs_training\\'
 class ImageDataset(torch.utils.data.Dataset):
     """Focal place dataset."""
 
-    def __init__(self, root_dir, transform_fnc=None, flag_shuffle=False, img_num=1, data_ratio=0,
-                 flag_inputs=[False, False], flag_outputs=[False, False], focus_dist=[0.1,.15,.3,0.7,1.5,1000000],req_f_indx=-1, 
-                 allif=True,f_number=0.1, f=2.9e-3,max_dpt = 3.):
+    def __init__(self, root_dir, transform_fnc=None, flag_shuffle=False, data_ratio=0,
+                 flag_inputs=[True, False,True], flag_outputs=[True, True], focus_dist=[0.1,.15,.3,0.7,1.5,100000],
+                 f=2.9e-3,req_f_indx=[0,2], f_number=0.1, max_dpt = 3.):
+
         self.root_dir = root_dir
         self.transform_fnc = transform_fnc
         self.flag_shuffle = flag_shuffle
 
         self.flag_rgb = flag_inputs[0]
         self.flag_coc = flag_inputs[1]
+        self.flag_aif = flag_inputs[2]
 
-        self.img_num = img_num
+        self.img_num = len(focus_dist)
         self.data_ratio = data_ratio
 
         self.flag_out_coc = flag_outputs[0]
@@ -103,46 +89,43 @@ class ImageDataset(torch.utils.data.Dataset):
         self.req_f_idx=req_f_indx
 
         ##### Load and sort all images
-        imglist_all = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "All.tif"]
-        imglist_dpt = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "Dpt.exr"]
-        imglist_allif = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "Aif.tif"]
+        self.imglist_all = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "All.tif"]
+        self.imglist_dpt = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "Dpt.exr"]
+        self.imglist_allif = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "Aif.tif"]
 
-        print("Total number of samples", len(self.imglist_dpt), "  Total number of seqs", len(self.imglist_dpt) / img_num)
+        print("Total number of samples", len(self.imglist_dpt), "  Total number of seqs", len(self.imglist_dpt) / self.img_num)
 
         self.imglist_all.sort()
         self.imglist_dpt.sort()
         self.imglist_allif.sort()
 
-        self.camera = CameraLens(f, f_number=f_number)
         self.max_dpt = max_dpt
 
     def __len__(self):
         return int(len(self.imglist_dpt))
 
     def __getitem__(self, idx):
-        ### select random focal distance if req_f_idx=-1
-        if(self.req_f_idx==-1):
+        ### select random focal distance if req_f_idx is empty list
+        if(len(self.req_f_idx)==0):
             req=random.randint(0,len(self.focus_dist)-1)
         else:
-            req=self.req_f_idx
+            req=random.choice(self.req_f_idx)
+
         ##### Read and process an image
         idx_dpt = int(idx)
         img_dpt = read_dpt(self.root_dir + self.imglist_dpt[idx_dpt])
-        img_dpt = np.clip(img_dpt, 0., self.max_dpt)
-        mat_dpt = img_dpt / self.max_dpt
+
+        #img_dpt = np.clip(img_dpt, 0., self.max_dpt)
+        #mat_dpt = img_dpt / self.max_dpt
 
         #extract N from the file name
-        N=float(self.imglist_dpt[idx_dpt].split('_')[1][1:])
+        kcam=float(self.imglist_dpt[idx_dpt].split('_')[1])
+        f=float(self.imglist_dpt[idx_dpt].split('_')[2])
 
-        mat_dpt = mat_dpt.copy()[:, :, np.newaxis]
+        mat_dpt = img_dpt.copy()[:, :, np.newaxis]
+        mat_dpt=mat_dpt/3.
 
         ind = idx * self.img_num
-
-        num_list = list(range(self.img_num))
-        if self.data_ratio == 1:
-            num_list = [0, 1, 2, 3, 4]
-        if self.flag_shuffle:
-            random.shuffle(num_list)
 
         # add RGB, CoC, Depth inputs
         mats_input = np.zeros((256, 256, 0))
@@ -153,15 +136,21 @@ class ImageDataset(torch.utils.data.Dataset):
             img_all = np.array(im)
             mat_all = img_all.copy() / 255.
             mats_input = np.concatenate((mats_input, mat_all), axis=2)
+        #if all in-focus image is also needed append that to the input matrix
+        if self.flag_aif:
+            im = Image.open(self.root_dir + self.imglist_allif[idx])
+            img_all = np.array(im)
+            mat_all = img_all.copy() / 255.
+            mats_input = np.concatenate((mats_input, mat_all), axis=2)
 
         if self.flag_coc or self.flag_out_coc:
-            img_msk = self.camera.get_coc(self.focus_dist[req], img_dpt)
-            img_msk = np.clip(img_msk, 0, 1.0e-4) / 1.0e-4
+            img_msk = get_blur(self.focus_dist[req], img_dpt)
+            #img_msk = np.clip(img_msk, 0, 1.0e-4) / 1.0e-4
             mat_msk = img_msk.copy()[:, :, np.newaxis]
             if self.flag_coc:
                 mats_input = np.concatenate((mats_input, mat_msk), axis=2)
             if self.flag_out_coc:
-                    mats_output = np.concatenate((mats_output, mat_msk), axis=2)
+                mats_output = np.concatenate((mats_output, mat_msk), axis=2)
 
         if self.flag_out_depth:
             mats_output = np.concatenate((mats_output, mat_dpt), axis=2)
@@ -170,7 +159,7 @@ class ImageDataset(torch.utils.data.Dataset):
 
         if self.transform_fnc:
             sample = self.transform_fnc(sample)
-        sample = {'input': sample['input'], 'output': sample['output'],'fdist':self.focus_dist[req],'N':N}
+        sample = {'input': sample['input'], 'output': sample['output'],'fdist':self.focus_dist[req],'kcam':kcam,'f':f*1e-3}
         return sample
 
 
@@ -190,12 +179,12 @@ def weights_init(m):
         m.bias.data.fill_(0.01)
 
 
-def load_data(DATA_PATH, DATA_SET, DATA_NUM, INP_IMG_NUM, FLAG_SHUFFLE, FLAG_IO_DATA, TRAIN_SPLIT,
+def load_data(DATA_PATH, DATA_SET, DATA_NUM, FLAG_SHUFFLE, FLAG_IO_DATA, TRAIN_SPLIT,
               WORKERS_NUM, BATCH_SIZE, DATASET_SHUFFLE, DATA_RATIO_STRATEGY, FOCUS_DIST, REQ_F_IDX,F_NUMBER, MAX_DPT):
     data_dir = DATA_PATH + DATA_SET + str(DATA_NUM) + '/'
     img_dataset = ImageDataset(root_dir=data_dir, transform_fnc=transforms.Compose([ToTensor()]),
-                               flag_shuffle=FLAG_SHUFFLE, img_num=INP_IMG_NUM, data_ratio=DATA_RATIO_STRATEGY,
-                               flag_inputs=[FLAG_IO_DATA['INP_RGB'], FLAG_IO_DATA['INP_COC']],
+                               flag_shuffle=FLAG_SHUFFLE, data_ratio=DATA_RATIO_STRATEGY,
+                               flag_inputs=[FLAG_IO_DATA['INP_RGB'], FLAG_IO_DATA['INP_COC'],FLAG_IO_DATA['INP_AIF']],
                                flag_outputs=[FLAG_IO_DATA['OUT_COC'], FLAG_IO_DATA['OUT_DEPTH']],
                                focus_dist=FOCUS_DIST, req_f_indx=REQ_F_IDX,f_number=F_NUMBER, max_dpt=MAX_DPT)
 
@@ -300,7 +289,11 @@ def compute_psnr(img1, img2, mode_limit=False, msk=0):
 
 
 def compute_ssim(mat_est, mat_gt, mode_limit=False, msk=0):
-    ssim_full = metrics.structural_similarity((mat_gt), (mat_est), data_range=img_as_float(mat_gt).max() - img_as_float(mat_gt).min(), channel_axis=-1,
+    if(skimage.__version__ >= '0.18'):
+        ssim_full = metrics.structural_similarity((mat_gt), (mat_est), data_range=img_as_float(mat_gt).max() - img_as_float(mat_gt).min(), channel_axis=-1,
+                     full=True)
+    else:
+        ssim_full = measure.compare_ssim((mat_gt), (mat_est), data_range=img_as_float(mat_gt).max() - img_as_float(mat_gt).min(), multichannel=True,
                      full=True)
     if mode_limit:
         ssim_mean = np.sum(ssim_full[1]*msk) / (np.sum(msk))

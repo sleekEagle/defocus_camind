@@ -18,12 +18,12 @@ import random
 import math
 from sacred import Experiment
 import csv
-import util_func_defocusnet
+import util_func
 
 
 
 TRAIN_PARAMS = {
-    'ARCH_NUM': 3,
+    'ARCH_NUM': 1,
     'FILTER_NUM': 16,
     'LEARNING_RATE': 0.0001,
     'FLAG_GPU': True,
@@ -44,29 +44,28 @@ TRAIN_PARAMS = {
     'MODEL2_EPOCH': 500,
     'MODEL2_TRAIN_STEP': True,
 }
-
 DATA_PARAMS = {
-    'DATA_PATH': 'C:\\Users\\lahir\\focusdata\\fs_6\\',
+    'DATA_PATH': 'C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\',
     'DATA_SET': 'fs_',
-    'DATA_NUM': 7,
+    'DATA_NUM': 'training',
     'FLAG_NOISE': False,
     'FLAG_SHUFFLE': False,
     'INP_IMG_NUM': 1,
-    'REQ_F_IDX':-1, # the index of the focal distance required. -1 for random fdist.
+    'REQ_F_IDX': [0,1,2,3,4], # list of indices of the focal distance aquired from the dataset. [] for random fdist.
     'FLAG_IO_DATA': {
         'INP_RGB': True,
         'INP_COC': False,
         'INP_AIF': False,
-        'INP_DIST':True,
+        'INP_DIST':False,
         'OUT_COC': True, # model outputs the blur
         'OUT_DEPTH': True, # model outputs the depth
     },
     'TRAIN_SPLIT': 0.8,
     'DATASET_SHUFFLE': True,
     'WORKERS_NUM': 4,
-    'BATCH_SIZE': 4,
+    'BATCH_SIZE': 16,
     'DATA_RATIO_STRATEGY': 0,
-    'FOCUS_DIST': [0.1,.15,.3,0.7,1.5],
+    'FOCUS_DIST': [0.1,.15,.3,0.7,1.5,1000000],
     'F_NUMBER': 1.,
     'MAX_DPT': 3.,
 }
@@ -105,12 +104,12 @@ def eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS):
         X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
         for t in range(stacknum):
             if DATA_PARAMS['FLAG_IO_DATA']['INP_DIST']:
-                focus_distance=sample_batch['fdist'][0].item()/focus_dists[-1]
-                #focus_distance = focus_dists[DATA_PARAMS['REQ_F_IDX']]/focus_dists[-1]
-                X2_fcs[0, t:(t + 1), :, :] = X2_fcs[0, t:(t + 1), :, :] * (focus_distance)
+                for i in range(DATA_PARAMS['BATCH_SIZE']):
+                    focus_distance=sample_batch['fdist'][i].item()
+                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())/sample_batch['kcam'][i].item()
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         output_step1, output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
-        mse_val, ssim_val, psnr_val=util_func_defocusnet.compute_all_metrics(output_step2,gt_step2)
+        mse_val, ssim_val, psnr_val=util_func.compute_all_metrics(output_step2,gt_step2)
         mse_ar.append(mse_val)
     return sum(mse_ar)/len(loaders[1]) 
 
@@ -125,6 +124,7 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
     for e_iter in range(TRAIN_PARAMS['EPOCHS_NUM'] - TRAIN_PARAMS['EPOCH_START']):
         epoch_iter = e_iter + TRAIN_PARAMS['EPOCH_START']
         loss_sum, iter_count = 0, 0
+        blur_loss,depth_loss=0,0
 
         for st_iter, sample_batch in enumerate(loaders[0]):
             # Setting up input and output data
@@ -176,11 +176,18 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
 
             # Training log
             loss_sum += loss.item()
+            blur_loss+=loss_step1.item()
+            depth_loss+=loss_step2.item()
+
             iter_count += 1.
 
             if (st_iter + 1) % 5 == 0:
                 print(model_info['model_name'], 'Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'
                       .format(epoch_iter + 1, TRAIN_PARAMS['EPOCHS_NUM'], st_iter + 1, model_info['total_steps'], loss_sum / iter_count))
+                
+                print('depth loss: '+str(depth_loss/iter_count))
+                print('blur loss: '+str(blur_loss/iter_count))
+
                 total_iter = model_info['total_steps'] * epoch_iter + st_iter
                 loss_sum, iter_count = 0, 0
 
@@ -190,25 +197,22 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
             mean_mse=eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS)
             print('mean MSE: '+str(mean_mse))
 
-
-
 import importlib
-importlib.reload(util_func_defocusnet)
-importlib.reload(util_func_defocusnet)
+importlib.reload(util_func)
 
 def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):
     # Initial preparations
-    model_dir, model_name, res_dir = util_func_defocusnet.set_output_folders(OUTPUT_PARAMS, DATA_PARAMS, TRAIN_PARAMS)
-    device_comp = util_func_defocusnet.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
+    model_dir, model_name, res_dir = util_func.set_output_folders(OUTPUT_PARAMS, DATA_PARAMS, TRAIN_PARAMS)
+    device_comp = util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
 
     # Training initializations
-    loaders, total_steps = util_func_defocusnet.load_data(DATA_PARAMS['DATA_PATH'],DATA_PARAMS['DATA_SET'],DATA_PARAMS['DATA_NUM'],
-    DATA_PARAMS['INP_IMG_NUM'],DATA_PARAMS['FLAG_SHUFFLE'],DATA_PARAMS['FLAG_IO_DATA'],DATA_PARAMS['TRAIN_SPLIT'],
+    loaders, total_steps = util_func.load_data(DATA_PARAMS['DATA_PATH'],DATA_PARAMS['DATA_SET'],DATA_PARAMS['DATA_NUM'],
+    DATA_PARAMS['FLAG_SHUFFLE'],DATA_PARAMS['FLAG_IO_DATA'],DATA_PARAMS['TRAIN_SPLIT'],
     DATA_PARAMS['WORKERS_NUM'],DATA_PARAMS['BATCH_SIZE'],DATA_PARAMS['DATASET_SHUFFLE'],DATA_PARAMS['DATA_RATIO_STRATEGY'],
     DATA_PARAMS['FOCUS_DIST'],DATA_PARAMS['REQ_F_IDX'],
     DATA_PARAMS['F_NUMBER'],DATA_PARAMS['MAX_DPT'])
 
-    model, inp_ch_num, out_ch_num = util_func_defocusnet.load_model(model_dir, model_name,TRAIN_PARAMS, DATA_PARAMS)
+    model, inp_ch_num, out_ch_num = util_func.load_model(model_dir, model_name,TRAIN_PARAMS, DATA_PARAMS)
     model = model.to(device=device_comp)
     model_params = model.parameters()
 
@@ -243,3 +247,28 @@ def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):
     train_model(loaders=loaders, model_info=model_info,TRAIN_PARAMS=TRAIN_PARAMS, DATA_PARAMS=DATA_PARAMS)
 
 run_exp(TRAIN_PARAMS,OUTPUT_PARAMS)
+
+'''
+import numpy as np
+import matplotlib.pyplot as plt
+
+s1ar=np.arange(0.1,1.5,0.047)
+s2ar=np.arange(0.01,3,0.1)
+
+blurs=[]
+for s1 in s1ar:
+    for s2 in s2ar:
+        blurs.append(abs(s1-s2)/s2)
+
+
+blur=abs(s1-s2)/s2
+min(blur),max(blur)
+
+plt.hist(blurs)
+plt.show()
+min(blurs),max(blurs)
+
+'''
+
+
+
