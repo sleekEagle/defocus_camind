@@ -7,11 +7,11 @@ from torchvision import transforms, utils
 
 import numpy as np
 import importlib
-import util_func_defocusnet
+import util_func
 
 
 TRAIN_PARAMS = {
-    'ARCH_NUM': 1,
+    'ARCH_NUM': 3,
     'FILTER_NUM': 16,
     'FLAG_GPU': True,
     'TRAINING_MODE': 2, #1: do not use step 1 , 2: use step 2
@@ -29,7 +29,7 @@ TRAIN_PARAMS = {
 DATA_PARAMS = {
     'DATA_PATH': 'C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\',
     'DATA_SET': 'fs_',
-    'DATA_NUM': 'shape',
+    'DATA_NUM': 'N3',
     'FLAG_NOISE': False,
     'FLAG_SHUFFLE': False,
     'INP_IMG_NUM': 1,
@@ -54,7 +54,7 @@ DATA_PARAMS = {
 
 OUTPUT_PARAMS = {
     'RESULT_PATH': 'C:\\Users\\lahir\\code\\defocus\\results\\',
-    'MODEL_PATH': 'C:\\Users\\lahir\\code\\defocus\\models\\a01_dtraining_t01\\a01_dtraining_t01_ep0.pth',
+    'MODEL_PATH': 'C:\\Users\\lahir\\code\\defocus\\models\\a03_dtraining_t01\\a03_dtraining_t01_ep0.pth',
 }
 
 def forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS, stacknum=1, additional_input=None):
@@ -63,16 +63,16 @@ def forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS, stacknum=1, additiona
     return (outputs[1], outputs[0]) if TRAIN_PARAMS['TRAINING_MODE']==2 else (outputs, outputs)
 
 def main():
-    device_comp = util_func_defocusnet.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
+    device_comp = util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
 
-    loaders, total_steps = util_func_defocusnet.load_data(DATA_PARAMS['DATA_PATH'],DATA_PARAMS['DATA_SET'],DATA_PARAMS['DATA_NUM'],
+    loaders, total_steps = util_func.load_data(DATA_PARAMS['DATA_PATH'],DATA_PARAMS['DATA_SET'],DATA_PARAMS['DATA_NUM'],
         DATA_PARAMS['FLAG_SHUFFLE'],DATA_PARAMS['FLAG_IO_DATA'],DATA_PARAMS['TRAIN_SPLIT'],
         DATA_PARAMS['WORKERS_NUM'],DATA_PARAMS['BATCH_SIZE'],DATA_PARAMS['DATASET_SHUFFLE'],DATA_PARAMS['DATA_RATIO_STRATEGY'],
         DATA_PARAMS['FOCUS_DIST'],DATA_PARAMS['REQ_F_IDX'],
         DATA_PARAMS['F_NUMBER'],DATA_PARAMS['MAX_DPT'])
 
 
-    model, inp_ch_num, out_ch_num = util_func_defocusnet.load_model("", "",TRAIN_PARAMS, DATA_PARAMS)
+    model, inp_ch_num, out_ch_num = util_func.load_model("", "",TRAIN_PARAMS, DATA_PARAMS)
     model = model.to(device=device_comp)
     model_params = model.parameters()
 
@@ -104,16 +104,26 @@ def main():
         focus_dists = DATA_PARAMS['FOCUS_DIST']
         X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
         for t in range(stacknum):
-            if DATA_PARAMS['FLAG_IO_DATA']['INP_DIST']:
-                focus_distance=sample_batch['fdist'][0].item()/focus_dists[-1]
-                #focus_distance = focus_dists[DATA_PARAMS['REQ_F_IDX']]/focus_dists[-1]
-                X2_fcs[0, t:(t + 1), :, :] = X2_fcs[0, t:(t + 1), :, :] * (focus_distance)
+            #iterate through the batch
+            for i in range(X.shape[0]):
+                focus_distance=sample_batch['fdist'][i].item()
+                #print(sample_batch['kcam'][i].item())
+                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())/sample_batch['kcam'][i].item()
+                #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())/kcam
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         output_step1, output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
-        mse_val, ssim_val, psnr_val=util_func_defocusnet.compute_all_metrics(output_step2,gt_step2)
+       
+        mse_val, ssim_val, psnr_val=util_func.compute_all_metrics(output_step2,gt_step2)
         mse_ar.append(mse_val)
     print('mse='+str(sum(mse_ar)/len(loaders[0])))
 
 if __name__ == "__main__":
     main()
+    '''
+    for i in [0.1,1,2,3,4,5,6,7,8]:
+        print(i)
+        main(i)
+        print('\n\n')
+    '''
+    
 

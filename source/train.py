@@ -23,7 +23,7 @@ import util_func
 
 
 TRAIN_PARAMS = {
-    'ARCH_NUM': 1,
+    'ARCH_NUM': 3,
     'FILTER_NUM': 16,
     'LEARNING_RATE': 0.0001,
     'FLAG_GPU': True,
@@ -103,10 +103,9 @@ def eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS):
         focus_dists = DATA_PARAMS['FOCUS_DIST']
         X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
         for t in range(stacknum):
-            if DATA_PARAMS['FLAG_IO_DATA']['INP_DIST']:
-                for i in range(DATA_PARAMS['BATCH_SIZE']):
-                    focus_distance=sample_batch['fdist'][i].item()
-                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())/sample_batch['kcam'][i].item()
+            for i in range(X.shape[0]):
+                focus_distance=sample_batch['fdist'][i].item()
+                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())/sample_batch['kcam'][i].item()
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         output_step1, output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
         mse_val, ssim_val, psnr_val=util_func.compute_all_metrics(output_step2,gt_step2)
@@ -150,10 +149,10 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
             '''
             X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
             for t in range(stacknum):
-                if DATA_PARAMS['FLAG_IO_DATA']['INP_DIST']:
-                    for i in range(DATA_PARAMS['BATCH_SIZE']):
-                        focus_distance=sample_batch['fdist'][i].item()
-                        X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())/sample_batch['kcam'][i].item()
+                #iterate through the batch
+                for i in range(X.shape[0]):
+                    focus_distance=sample_batch['fdist'][i].item()
+                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())/sample_batch['kcam'][i].item()
             X2_fcs = X2_fcs.float().to(model_info['device_comp'])
 
             # Forward and compute loss
@@ -246,7 +245,7 @@ def main():
 if __name__ == "__main__":
     main()
 
-
+'''
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -280,8 +279,7 @@ min(blur),max(blur)
 plt.hist(blurs)
 plt.show()
 min(blurs),max(blurs)
-
-
+'''
 
 
 
