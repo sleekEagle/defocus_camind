@@ -116,5 +116,4 @@ model_info = {'model': model,
                   'model_params': model_params,
                   }
 mean_mse=eval(loaders[0],model_info, TRAIN_PARAMS, DATA_PARAMS)
-
-loader=loaders[0]
+print(mean_mse)

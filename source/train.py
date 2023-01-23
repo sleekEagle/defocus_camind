@@ -27,7 +27,7 @@ TRAIN_PARAMS = {
     'FILTER_NUM': 16,
     'LEARNING_RATE': 0.0001,
     'FLAG_GPU': True,
-    'EPOCHS_NUM': 100, 'EPOCH_START': 0,
+    'EPOCHS_NUM': 500, 'EPOCH_START': 0,
     'RANDOM_LEN_INPUT': 0,
     'TRAINING_MODE': 2, #1: do not use step 1 , 2: use step 2
 
@@ -60,7 +60,7 @@ DATA_PARAMS = {
         'OUT_COC': True, # model outputs the blur
         'OUT_DEPTH': True, # model outputs the depth
     },
-    'TRAIN_SPLIT': 0.8,
+    'TRAIN_SPLIT': 0.9,
     'DATASET_SHUFFLE': True,
     'WORKERS_NUM': 4,
     'BATCH_SIZE': 16,
@@ -197,10 +197,7 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
             mean_mse=eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS)
             print('mean MSE: '+str(mean_mse))
 
-import importlib
-importlib.reload(util_func)
-
-def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):
+def main():
     # Initial preparations
     model_dir, model_name, res_dir = util_func.set_output_folders(OUTPUT_PARAMS, DATA_PARAMS, TRAIN_PARAMS)
     device_comp = util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
@@ -246,19 +243,35 @@ def run_exp(TRAIN_PARAMS,OUTPUT_PARAMS):
     # Run training
     train_model(loaders=loaders, model_info=model_info,TRAIN_PARAMS=TRAIN_PARAMS, DATA_PARAMS=DATA_PARAMS)
 
-run_exp(TRAIN_PARAMS,OUTPUT_PARAMS)
+if __name__ == "__main__":
+    main()
 
-'''
+
 import numpy as np
 import matplotlib.pyplot as plt
 
 s1ar=np.arange(0.1,1.5,0.047)
-s2ar=np.arange(0.01,3,0.1)
+s2ar=np.arange(0.1,0.8,0.01)
+
 
 blurs=[]
+s1list=[]
+s2list=[]
 for s1 in s1ar:
     for s2 in s2ar:
         blurs.append(abs(s1-s2)/s2)
+        s1list.append(s1)
+        s2list.append(s2)
+
+fig = plt.figure()
+ax = plt.axes(projection='3d')
+ax.scatter(s1list, s2list, blurs, 'gray')
+plt.xlabel('s1')
+plt.ylabel('s2')
+plt.zlabel('|s1-s2|/s2')
+plt.show()
+
+
 
 
 blur=abs(s1-s2)/s2
@@ -268,7 +281,7 @@ plt.hist(blurs)
 plt.show()
 min(blurs),max(blurs)
 
-'''
+
 
 
 
