@@ -33,7 +33,7 @@ DATA_PARAMS = {
     'FLAG_NOISE': False,
     'FLAG_SHUFFLE': False,
     'INP_IMG_NUM': 1,
-    'REQ_F_IDX':-1, # the index of the focal distance aquired from the dataset. -1 for random fdist.
+    'REQ_F_IDX':[0,1,2,3,4], # the index of the focal distance aquired from the dataset. -1 for random fdist.
     'FLAG_IO_DATA': {
         'INP_RGB': True,
         'INP_COC': False,
@@ -62,9 +62,39 @@ def forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS, stacknum=1, additiona
     outputs = model_info['model'](X, model_info['inp_ch_num'], stacknum, flag_step2=flag_step2, x2 = additional_input)
     return (outputs[1], outputs[0]) if TRAIN_PARAMS['TRAINING_MODE']==2 else (outputs, outputs)
 
-def eval(loader,model_info, TRAIN_PARAMS, DATA_PARAMS):
+def main():
+    device_comp = util_func_defocusnet.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
+
+    loaders, total_steps = util_func_defocusnet.load_data(DATA_PARAMS['DATA_PATH'],DATA_PARAMS['DATA_SET'],DATA_PARAMS['DATA_NUM'],
+        DATA_PARAMS['FLAG_SHUFFLE'],DATA_PARAMS['FLAG_IO_DATA'],DATA_PARAMS['TRAIN_SPLIT'],
+        DATA_PARAMS['WORKERS_NUM'],DATA_PARAMS['BATCH_SIZE'],DATA_PARAMS['DATASET_SHUFFLE'],DATA_PARAMS['DATA_RATIO_STRATEGY'],
+        DATA_PARAMS['FOCUS_DIST'],DATA_PARAMS['REQ_F_IDX'],
+        DATA_PARAMS['F_NUMBER'],DATA_PARAMS['MAX_DPT'])
+
+
+    model, inp_ch_num, out_ch_num = util_func_defocusnet.load_model("", "",TRAIN_PARAMS, DATA_PARAMS)
+    model = model.to(device=device_comp)
+    model_params = model.parameters()
+
+    # loading weights of the trained model
+    trained_model=OUTPUT_PARAMS['MODEL_PATH']
+    pretrained_dict = torch.load(trained_model)
+    model_dict = model.state_dict()
+    for param_tensor in model_dict:
+        for param_pre in pretrained_dict:
+            if param_tensor == param_pre:
+                model_dict.update({param_tensor: pretrained_dict[param_pre]})
+    model.load_state_dict(model_dict)
+
+    model_info = {'model': model,
+                    'total_steps': total_steps,
+                    'inp_ch_num': inp_ch_num,
+                    'out_ch_num':out_ch_num,
+                    'device_comp': device_comp,
+                    'model_params': model_params,
+                    }
     mse_ar=[]
-    for st_iter, sample_batch in enumerate(loader):
+    for st_iter, sample_batch in enumerate(loaders[0]):
         X = sample_batch['input'].float().to(model_info['device_comp'])
         Y = sample_batch['output'].float().to(model_info['device_comp'])
         if TRAIN_PARAMS['TRAINING_MODE'] == 2:
@@ -82,38 +112,8 @@ def eval(loader,model_info, TRAIN_PARAMS, DATA_PARAMS):
         output_step1, output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
         mse_val, ssim_val, psnr_val=util_func_defocusnet.compute_all_metrics(output_step2,gt_step2)
         mse_ar.append(mse_val)
-    return sum(mse_ar)/len(loaders[1]) 
+    print('mse='+str(sum(mse_ar)/len(loaders[0])))
 
+if __name__ == "__main__":
+    main()
 
-device_comp = util_func_defocusnet.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
-
-loaders, total_steps = util_func_defocusnet.load_data(DATA_PARAMS['DATA_PATH'],DATA_PARAMS['DATA_SET'],DATA_PARAMS['DATA_NUM'],
-    DATA_PARAMS['FLAG_SHUFFLE'],DATA_PARAMS['FLAG_IO_DATA'],DATA_PARAMS['TRAIN_SPLIT'],
-    DATA_PARAMS['WORKERS_NUM'],DATA_PARAMS['BATCH_SIZE'],DATA_PARAMS['DATASET_SHUFFLE'],DATA_PARAMS['DATA_RATIO_STRATEGY'],
-    DATA_PARAMS['FOCUS_DIST'],DATA_PARAMS['REQ_F_IDX'],
-    DATA_PARAMS['F_NUMBER'],DATA_PARAMS['MAX_DPT'])
-
-
-model, inp_ch_num, out_ch_num = util_func_defocusnet.load_model("", "",TRAIN_PARAMS, DATA_PARAMS)
-model = model.to(device=device_comp)
-model_params = model.parameters()
-
-# loading weights of the trained model
-trained_model=OUTPUT_PARAMS['MODEL_PATH']
-pretrained_dict = torch.load(trained_model)
-model_dict = model.state_dict()
-for param_tensor in model_dict:
-    for param_pre in pretrained_dict:
-        if param_tensor == param_pre:
-            model_dict.update({param_tensor: pretrained_dict[param_pre]})
-model.load_state_dict(model_dict)
-
-model_info = {'model': model,
-                  'total_steps': total_steps,
-                  'inp_ch_num': inp_ch_num,
-                  'out_ch_num':out_ch_num,
-                  'device_comp': device_comp,
-                  'model_params': model_params,
-                  }
-mean_mse=eval(loaders[0],model_info, TRAIN_PARAMS, DATA_PARAMS)
-print(mean_mse)
