@@ -6,7 +6,7 @@ dofNet_arch1 modify to be camera independent
 
 blur_pix=|s2-s1|/s2 * f^2/[N(s1-f)] * 1/p * out_pix/sensor_pix
 blur_pix=|s2-s1|/s2 * Kcam/(s1-f)
-where kcam=f^2/N * 1/p * out_pix/sensor_pix
+where 1/kcam=f^2/N * 1/p * out_pix/sensor_pix
 
 p - pixel size mm
 sensor_pix - number of pixels in the sensor
@@ -14,7 +14,7 @@ out_pix - number of pixels in the output image
 * these 2 can be different from each other due to things like pixel binning
 Imagine a model can estimate the blur_pix given a defocused (focused) image
 This is named blur_pix_est
-|s2-s1|/s1 = blur_pix_est * (s1-f)/kcam
+|s2-s1|/s1 = blur_pix_est * (s1-f)*kcam
 '''
 
 import torch
@@ -32,6 +32,7 @@ class AENet(nn.Module):
         self.num_filter = num_filter
         self.n_blocks = n_blocks
         act_fnc = nn.LeakyReLU(0.2, inplace=True)
+        self.relu=nn.ReLU()
 
 
         self.conv_down_0 = self.convsblocks(self.in_dim, self.num_filter * 1, act_fnc)
@@ -52,6 +53,7 @@ class AENet(nn.Module):
 
         self.conv_out = nn.Sequential(
             nn.Conv2d(self.num_filter, self.out_dim, kernel_size=3, stride=1, padding=1),
+            nn.ReLU()
         )
 
         if flag_step2:
@@ -167,7 +169,12 @@ class AENet(nn.Module):
                         out = out_col
                     else:
                         out = torch.cat([out, out_col], dim=1)
-
+        #multiply out by (s1-f)*Kcam to make it camera independent 
+        #i.e. equal to |s1-s2|/s2
+        mul=torch.empty_like(out)
+        for i in range(out.shape[0]):
+            mul[i,:,:,:]=out[i,:,:,:]*x2[i,:,:,:]
+        
         if flag_step2:
             down2 = []
             pool_temp = []
@@ -179,7 +186,7 @@ class AENet(nn.Module):
                         pool_temp.pop(0)
                     else:
                         #multiply the estimated blur_pix by (s1-f)/kcam
-                        joint_pool = out[:, 1 * i:1 * (i + 1), :, :]*x2[:, 1 * i:1 * (i + 1), :, :]
+                        joint_pool = mul[:, 1 * i:1 * (i + 1), :, :]
                     #print('joint_pool : '+str(joint_pool.shape))
                     conv = self.__getattr__('conv_down2_' + str(j + 0))(joint_pool)
                     #print('conv : '+str(conv.shape))
@@ -226,8 +233,8 @@ class AENet(nn.Module):
 
             end2 = self.conv_end2(unpool_max[0])
             out_step2 = self.conv_out2(end2)
-
+        
         if flag_step2:
-            return out_step2, out
+            return out_step2, mul
         else:
-            return out
+            return mul

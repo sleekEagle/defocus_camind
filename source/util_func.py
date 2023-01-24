@@ -52,7 +52,7 @@ output |s2-s1|/s2
 '''
 def get_blur(s1,s2):
     blur=abs(s2-s1)/s2
-    return blur/150.
+    return blur/3.
 
 '''
 All in-focus image is attached to the input matrix after the RGB image

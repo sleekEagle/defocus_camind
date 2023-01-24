@@ -62,7 +62,7 @@ def forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS, stacknum=1, additiona
     outputs = model_info['model'](X, model_info['inp_ch_num'], stacknum, flag_step2=flag_step2, x2 = additional_input)
     return (outputs[1], outputs[0]) if TRAIN_PARAMS['TRAINING_MODE']==2 else (outputs, outputs)
 
-def main():
+def main(kcam):
     device_comp = util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
 
     loaders, total_steps = util_func.load_data(DATA_PARAMS['DATA_PATH'],DATA_PARAMS['DATA_SET'],DATA_PARAMS['DATA_NUM'],
@@ -94,6 +94,7 @@ def main():
                     'model_params': model_params,
                     }
     mse_ar=[]
+    step1_ar,step2_ar=[],[]
     for st_iter, sample_batch in enumerate(loaders[0]):
         X = sample_batch['input'].float().to(model_info['device_comp'])
         Y = sample_batch['output'].float().to(model_info['device_comp'])
@@ -108,22 +109,28 @@ def main():
             for i in range(X.shape[0]):
                 focus_distance=sample_batch['fdist'][i].item()
                 #print(sample_batch['kcam'][i].item())
-                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())/sample_batch['kcam'][i].item()
-                #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())/kcam
+                #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()
+                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*kcam
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         output_step1, output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
+        step1_ar.append(torch.mean(output_step1).item())
+        step2_ar.append(torch.mean(output_step2).item())
        
         mse_val, ssim_val, psnr_val=util_func.compute_all_metrics(output_step2,gt_step2)
         mse_ar.append(mse_val)
     print('mse='+str(sum(mse_ar)/len(loaders[0])))
+    print('mean blur = '+str(np.mean(np.array(step1_ar))))
+    print('mean depth = '+str(np.mean(np.array(step2_ar))))
+
 
 if __name__ == "__main__":
-    main()
-    '''
-    for i in [0.1,1,2,3,4,5,6,7,8]:
+    # main()
+    
+    for i in [0]:
         print(i)
         main(i)
         print('\n\n')
-    '''
+    
+    
     
 

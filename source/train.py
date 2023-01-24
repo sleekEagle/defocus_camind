@@ -20,8 +20,6 @@ from sacred import Experiment
 import csv
 import util_func
 
-
-
 TRAIN_PARAMS = {
     'ARCH_NUM': 3,
     'FILTER_NUM': 16,
@@ -37,7 +35,7 @@ TRAIN_PARAMS = {
     'MODEL1_ARCH_NUM': 1,
     'MODEL1_NAME': "d06_t01", 'MODEL1_INPUT_NUM': 1,
     'MODEL1_EPOCH': 0, 'MODEL1_FILTER_NUM': 16,
-    'MODEL1_LOSS_WEIGHT': 1.,
+    'MODEL1_LOSS_WEIGHT': 1,
 
     'MODEL2_LOAD': False,
     'MODEL2_NAME': "a01_d06_t01",
@@ -80,15 +78,8 @@ OUTPUT_PARAMS = {
 }
 
 def forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS, stacknum=1, additional_input=None):
-    #to train with random number of inputs
-    if TRAIN_PARAMS['RANDOM_LEN_INPUT']==1 and stacknum<DATA_PARAMS['INP_IMG_NUM']:
-        X[:, model_info['inp_ch_num'] * stacknum:, :, :] = torch.zeros(
-            [X.shape[0], (DATA_PARAMS['INP_IMG_NUM'] - stacknum) * model_info['inp_ch_num'], X.shape[2], X.shape[3]])
-
     flag_step2 = True if TRAIN_PARAMS['TRAINING_MODE']==2 else False
-
     outputs = model_info['model'](X, model_info['inp_ch_num'], stacknum, flag_step2=flag_step2, x2 = additional_input)
-
     return (outputs[1], outputs[0]) if TRAIN_PARAMS['TRAINING_MODE']==2 else (outputs, outputs)
 
 def eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS):
@@ -105,7 +96,8 @@ def eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS):
         for t in range(stacknum):
             for i in range(X.shape[0]):
                 focus_distance=sample_batch['fdist'][i].item()
-                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())/sample_batch['kcam'][i].item()
+                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()
+                #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         output_step1, output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
         mse_val, ssim_val, psnr_val=util_func.compute_all_metrics(output_step2,gt_step2)
@@ -131,6 +123,31 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
             Y = sample_batch['output'].float().to(model_info['device_comp'])
             optimizer.zero_grad()
 
+            '''
+            import matplotlib.pyplot as plt
+            i=1
+            #fdist
+            sample_batch['fdist'][i]
+
+            plt.imshow(X[i,0,:,:].cpu())
+            plt.show()
+
+            #blur
+            plt.imshow(Y[i,0,:,:].cpu())
+            plt.show()
+
+            #depth
+            plt.imshow(Y[i,1,:,:].cpu())
+            plt.show()
+
+            s2=Y[i,1,40,111].item()
+            s1=sample_batch['fdist'][i].item()
+            blur=abs(s1-s2)/s2
+
+            Y[i,0,40,111].item()
+
+            torch.mean(Y[:,0,:,:])
+            '''
             if TRAIN_PARAMS['TRAINING_MODE'] == 2:
                 gt_step1 = Y[:, :-1, :, :]
                 gt_step2 = Y[:, -1:, :, :]
@@ -152,11 +169,17 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
                 #iterate through the batch
                 for i in range(X.shape[0]):
                     focus_distance=sample_batch['fdist'][i].item()
-                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())/sample_batch['kcam'][i].item()
+                    #print((focus_distance-sample_batch['f'][i].item())/sample_batch['kcam'][i].item())
+                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()
+                    #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]
             X2_fcs = X2_fcs.float().to(model_info['device_comp'])
+
+            #print("X2_fcs mean : " + str(torch.mean(X2_fcs,dim=1).mean(dim=1).mean(dim=1)))
 
             # Forward and compute loss
             output_step1, output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
+            #print('blur pred:'+str(torch.mean(output_step1).item()))
+            #print('blur gt:'+str(torch.mean(gt_step1).item()))
 
             if TRAIN_PARAMS['TRAINING_MODE'] == 2:
                 loss_step1, loss_step2 = 0, 0
@@ -188,7 +211,7 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
                 print('blur loss: '+str(blur_loss/iter_count))
 
                 total_iter = model_info['total_steps'] * epoch_iter + st_iter
-                loss_sum, iter_count = 0, 0
+                loss_sum, iter_count,blur_loss,depth_loss = 0, 0,0,0
 
         # Save model
         if (epoch_iter + 1) % 10 == 0:

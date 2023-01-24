@@ -46,7 +46,7 @@ DATA_PARAMS = {
     'FLAG_NOISE': False,
     'FLAG_SHUFFLE': False,
     'INP_IMG_NUM': 1,
-    'REQ_F_IDX': [3], # list of indices of the focal distance aquired from the dataset. [] for random fdist.
+    'REQ_F_IDX': [0,1,2,3,4], # list of indices of the focal distance aquired from the dataset. [] for random fdist.
     'FLAG_IO_DATA': {
         'INP_RGB': True,
         'INP_COC': False,
