@@ -46,7 +46,8 @@ DATA_PARAMS = {
     'FLAG_NOISE': False,
     'FLAG_SHUFFLE': False,
     'INP_IMG_NUM': 1,
-    'REQ_F_IDX': [0,1,2,3,4], # list of indices of the focal distance aquired from the dataset. [] for random fdist.
+    'REQ_F_IDX': [0], # list of indices of the focal distance aquired from the dataset. [] for random fdist.
+    'CRITICAL_S2':0.1,
     'FLAG_IO_DATA': {
         'INP_RGB': True,
         'INP_COC': False,
@@ -89,12 +90,19 @@ def forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS, stacknum=1, additiona
 
 def eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS):
     mse_ar=[]
+    s2mse=[]
     for st_iter, sample_batch in enumerate(loaders[1]):
         X = sample_batch['input'].float().to(model_info['device_comp'])
         Y = sample_batch['output'].float().to(model_info['device_comp'])
         if TRAIN_PARAMS['TRAINING_MODE'] == 2:
             gt_step1 = Y[:, :-1, :, :]
             gt_step2 = Y[:, -1:, :, :]
+
+        if(False):
+            mask=(gt_step2*3.0>0.15).int()*(gt_step2*3.0<3.0).int()
+        else:
+            mask=torch.ones_like(gt_step2)
+
         stacknum = DATA_PARAMS['INP_IMG_NUM']
         focus_dists = DATA_PARAMS['FOCUS_DIST']
         X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
@@ -104,9 +112,9 @@ def eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS):
                 X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance)
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         output_step1, output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
-        mse_val, ssim_val, psnr_val=util_func_defocusnet.compute_all_metrics(output_step2,gt_step2)
-        mse_ar.append(mse_val)
-    return sum(mse_ar)/len(loaders[1]) 
+        mse2=torch.sum(torch.square(output_step2*3-gt_step2*3)*mask).item()/torch.sum(mask).item()
+        s2mse.append(mse2)
+    return sum(s2mse)/len(s2mse) 
 
 
 def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
@@ -131,6 +139,12 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
             if TRAIN_PARAMS['TRAINING_MODE'] == 2:
                 gt_step1 = Y[:, :-1, :, :]
                 gt_step2 = Y[:, -1:, :, :]
+            
+            if(False):
+                mask=(gt_step2*3.0>0.15).int()*(gt_step2*3.0<3.0).int()
+            else:
+                mask=torch.ones_like(gt_step2)
+
 
             stacknum = DATA_PARAMS['INP_IMG_NUM']
             if TRAIN_PARAMS['RANDOM_LEN_INPUT'] > 0:
@@ -151,9 +165,9 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
             if TRAIN_PARAMS['TRAINING_MODE'] == 2:
                 loss_step1, loss_step2 = 0, 0
                 if DATA_PARAMS['FLAG_IO_DATA']['OUT_COC']:
-                    loss_step1 = criterion(output_step1, gt_step1)
+                    loss_step1 = criterion(output_step1*mask, gt_step1*mask)
                 if DATA_PARAMS['FLAG_IO_DATA']['OUT_DEPTH']:
-                    loss_step2 = criterion(output_step2, gt_step2)
+                    loss_step2 = criterion(output_step2*mask, gt_step2*mask)
                 loss = loss_step1 * TRAIN_PARAMS['MODEL1_LOSS_WEIGHT'] + loss_step2
             elif TRAIN_PARAMS['TRAINING_MODE'] == 1:
                 loss = criterion(output_step1, Y)

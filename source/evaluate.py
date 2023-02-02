@@ -29,11 +29,12 @@ TRAIN_PARAMS = {
 DATA_PARAMS = {
     'DATA_PATH': 'C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\',
     'DATA_SET': 'fs_',
-    'DATA_NUM': 'N3',
+    'DATA_NUM': 'N1.35',
     'FLAG_NOISE': False,
     'FLAG_SHUFFLE': False,
     'INP_IMG_NUM': 1,
-    'REQ_F_IDX':[0,1,2,3,4], # the index of the focal distance aquired from the dataset. -1 for random fdist.
+    'REQ_F_IDX':[0], # the index of the focal distance aquired from the dataset. -1 for random fdist.
+    'CRITICAL_S2':0.1,
     'FLAG_IO_DATA': {
         'INP_RGB': True,
         'INP_COC': False,
@@ -54,16 +55,18 @@ DATA_PARAMS = {
 
 OUTPUT_PARAMS = {
     'RESULT_PATH': 'C:\\Users\\lahir\\code\\defocus\\results\\',
-    'MODEL_PATH': 'C:\\Users\\lahir\\code\\defocus\\models\\a03_dtraining_t01\\a03_dtraining_t01_ep0.pth',
+    'MODEL_PATH': 'C:\\Users\\lahir\\code\\defocus\\models\\trainingrandN1.5\\ours_f0.1_dist0.15-3.0\\a03_dtrainingrandN1.5_t01_ep0.pth',
+    'EXP_NUM': 1,
 }
 
 def forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS, stacknum=1, additional_input=None):
     flag_step2 = True if TRAIN_PARAMS['TRAINING_MODE']==2 else False
-    outputs = model_info['model'](X, model_info['inp_ch_num'], stacknum, flag_step2=flag_step2, x2 = additional_input)
+    outputs = model_info['model'](X, model_info['inp_ch_num'], stacknum, flag_step2=flag_step2, x2 = additional_input,parallel=False)
     return (outputs[1], outputs[0]) if TRAIN_PARAMS['TRAINING_MODE']==2 else (outputs, outputs)
 
 def main(kcam):
     device_comp = util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
+    model_dir, model_name, res_dir = util_func.set_output_folders(OUTPUT_PARAMS, DATA_PARAMS, TRAIN_PARAMS)
 
     loaders, total_steps = util_func.load_data(DATA_PARAMS['DATA_PATH'],DATA_PARAMS['DATA_SET'],DATA_PARAMS['DATA_NUM'],
         DATA_PARAMS['FLAG_SHUFFLE'],DATA_PARAMS['FLAG_IO_DATA'],DATA_PARAMS['TRAIN_SPLIT'],
@@ -72,7 +75,7 @@ def main(kcam):
         DATA_PARAMS['F_NUMBER'],DATA_PARAMS['MAX_DPT'])
 
 
-    model, inp_ch_num, out_ch_num = util_func.load_model("", "",TRAIN_PARAMS, DATA_PARAMS)
+    model, inp_ch_num, out_ch_num = util_func.load_model(model_dir, model_name,TRAIN_PARAMS, DATA_PARAMS)
     model = model.to(device=device_comp)
     model_params = model.parameters()
 
@@ -93,8 +96,9 @@ def main(kcam):
                     'device_comp': device_comp,
                     'model_params': model_params,
                     }
-    mse_ar=[]
-    step1_ar,step2_ar=[],[]
+    absloss_sum,iter_count,blur_sum=0,0,0
+    s1mse,s2mse,blurlosses,meanblurs=[],[],[],[]
+    
     for st_iter, sample_batch in enumerate(loaders[0]):
         X = sample_batch['input'].float().to(model_info['device_comp'])
         Y = sample_batch['output'].float().to(model_info['device_comp'])
@@ -103,33 +107,60 @@ def main(kcam):
             gt_step2 = Y[:, -1:, :, :]
         stacknum = DATA_PARAMS['INP_IMG_NUM']
         focus_dists = DATA_PARAMS['FOCUS_DIST']
-        X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
+        if(True):
+            mask=(gt_step2>0.15).int()*(gt_step2<0.5).int()
+        else:
+            mask=torch.ones_like(gt_step2)
+
+        X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]],requires_grad=False)
+        s1_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
         for t in range(stacknum):
             #iterate through the batch
             for i in range(X.shape[0]):
                 focus_distance=sample_batch['fdist'][i].item()
-                #print(sample_batch['kcam'][i].item())
-                #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()
-                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*kcam
+                #print((focus_distance-sample_batch['f'][i].item())/sample_batch['kcam'][i].item())
+                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()/1.5
+                s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :] * (focus_distance)
+                #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
-        output_step1, output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
-        step1_ar.append(torch.mean(output_step1).item())
-        step2_ar.append(torch.mean(output_step2).item())
-       
-        mse_val, ssim_val, psnr_val=util_func.compute_all_metrics(output_step2,gt_step2)
-        mse_ar.append(mse_val)
-    print('mse='+str(sum(mse_ar)/len(loaders[0])))
-    print('mean blur = '+str(np.mean(np.array(step1_ar))))
-    print('mean depth = '+str(np.mean(np.array(step2_ar))))
+        s1_fcs = s1_fcs.float().to(model_info['device_comp'])
+        print(sample_batch['kcam'][0].item())
+        print(sample_batch['fdist'][0].item())
+        print('****')
+        
+        output_step1,output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
+        blurpred=output_step1
+        #calculate s2 provided that s2>s1
+        s2est=0.1*1./(1-blurpred)
+        #calculate MSE value
+        mse1=torch.sum(torch.square(s2est-gt_step2)*mask).item()/torch.sum(mask).item()
+        #mse_val, ssim_val, psnr_val=util_func.compute_all_metrics(output_step2*mask,gt_step2*mask)
+        s1mse.append(mse1)
+        mse2=torch.sum(torch.square(output_step2-gt_step2)*mask).item()/torch.sum(mask).item()
+        s2mse.append(mse2)
+        #mean blur
+        blurloss=torch.sum(torch.square(output_step1-gt_step1)*mask).item()/torch.sum(mask).item()
+        blurlosses.append(blurloss)
+        meanblur=torch.sum(torch.square(output_step1)*mask).item()/torch.sum(mask).item()
+        meanblurs.append(meanblur)
+        iter_count+=1
+    s2loss1=sum(s1mse)/len(s1mse)
+    s2loss2=sum(s2mse)/len(s2mse)
+    print('s2 loss1: '+str(s2loss1))
+    print('s2 loss2: '+str(s2loss2))
+    print('blur loss = '+str(sum(blurlosses)/len(blurlosses)))
+    print('mean blur = '+str(sum(meanblurs)/len(meanblurs)))
 
 
 if __name__ == "__main__":
-    # main()
-    
-    for i in [0]:
+    main(1)
+    '''
+    for i in range(1,10):
         print(i)
         main(i)
         print('\n\n')
+    '''
+    
     
     
     

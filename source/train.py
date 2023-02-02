@@ -27,7 +27,7 @@ TRAIN_PARAMS = {
     'FLAG_GPU': True,
     'EPOCHS_NUM': 500, 'EPOCH_START': 0,
     'RANDOM_LEN_INPUT': 0,
-    'TRAINING_MODE': 2, #1: do not use step 1 , 2: use step 2
+    'TRAINING_MODE':2, #1: do not use step 1 , 2: use step 2
 
     'MODEL_STEPS': 1,
 
@@ -45,11 +45,12 @@ TRAIN_PARAMS = {
 DATA_PARAMS = {
     'DATA_PATH': 'C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\',
     'DATA_SET': 'fs_',
-    'DATA_NUM': 'training',
+    'DATA_NUM': 'train_N1',
     'FLAG_NOISE': False,
     'FLAG_SHUFFLE': False,
     'INP_IMG_NUM': 1,
-    'REQ_F_IDX': [0,1,2,3,4], # list of indices of the focal distance aquired from the dataset. [] for random fdist.
+    'REQ_F_IDX': [0], # list of indices of the focal distance aquired from the dataset. [] for random fdist.
+    'CRITICAL_S2': 0.1,
     'FLAG_IO_DATA': {
         'INP_RGB': True,
         'INP_COC': False,
@@ -79,11 +80,12 @@ OUTPUT_PARAMS = {
 
 def forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS, stacknum=1, additional_input=None):
     flag_step2 = True if TRAIN_PARAMS['TRAINING_MODE']==2 else False
-    outputs = model_info['model'](X, model_info['inp_ch_num'], stacknum, flag_step2=flag_step2, x2 = additional_input)
+    outputs = model_info['model'](X, model_info['inp_ch_num'], stacknum, flag_step2=flag_step2, x2 = additional_input,parallel=False)
     return (outputs[1], outputs[0]) if TRAIN_PARAMS['TRAINING_MODE']==2 else (outputs, outputs)
 
-def eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS):
+def eval(loaders,model_info):
     mse_ar=[]
+    s2mse=[]
     for st_iter, sample_batch in enumerate(loaders[1]):
         X = sample_batch['input'].float().to(model_info['device_comp'])
         Y = sample_batch['output'].float().to(model_info['device_comp'])
@@ -92,19 +94,35 @@ def eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS):
             gt_step2 = Y[:, -1:, :, :]
         stacknum = DATA_PARAMS['INP_IMG_NUM']
         focus_dists = DATA_PARAMS['FOCUS_DIST']
-        X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
+
+        if(True):
+            mask=(gt_step2>0.15).int()*(gt_step2<1.0).int()
+        else:
+            mask=torch.ones_like(gt_step2)
+
+        X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]],requires_grad=False)
         for t in range(stacknum):
+            #iterate through the batch
             for i in range(X.shape[0]):
                 focus_distance=sample_batch['fdist'][i].item()
-                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()
-                #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]
+                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()/1.5
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
-        output_step1, output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
-        mse_val, ssim_val, psnr_val=util_func.compute_all_metrics(output_step2,gt_step2)
-        mse_ar.append(mse_val)
-    return sum(mse_ar)/len(loaders[1]) 
+        
+        output_step1,output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
+        #output_step1=output_step1*(0.1-2.9e-3)*7
+        blurpred=output_step1
+        #calculate s2 provided that s2>s1
+        s2est=0.1*1./(1-blurpred)
+        #calculate MSE value
+        mse=torch.sum(torch.square(s2est-gt_step2)*mask).item()/torch.sum(mask).item()
+        #mse_val, ssim_val, psnr_val=util_func.compute_all_metrics(output_step2*mask,gt_step2*mask)
+        mse_ar.append(mse)
+        mse2=torch.sum(torch.square(output_step2-gt_step2)*mask).item()/torch.sum(mask).item()
+        s2mse.append(mse2)
 
-def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
+    return sum(mse_ar)/len(mse_ar),sum(s2mse)/len(s2mse)
+
+def train_model(loaders, model_info):
     criterion = torch.nn.MSELoss()
     optimizer = optim.Adam(model_info['model_params'], lr=TRAIN_PARAMS['LEARNING_RATE'])
 
@@ -114,14 +132,25 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
     print("Total number of epochs:", TRAIN_PARAMS['EPOCHS_NUM'])
     for e_iter in range(TRAIN_PARAMS['EPOCHS_NUM'] - TRAIN_PARAMS['EPOCH_START']):
         epoch_iter = e_iter + TRAIN_PARAMS['EPOCH_START']
-        loss_sum, iter_count = 0, 0
-        blur_loss,depth_loss=0,0
-
+        loss_sum, iter_count,absloss_sum= 0,0,0
+        depthloss_sum,blurloss_sum=0,0
+        blur_sum=0
         for st_iter, sample_batch in enumerate(loaders[0]):
             # Setting up input and output data
             X = sample_batch['input'].float().to(model_info['device_comp'])
             Y = sample_batch['output'].float().to(model_info['device_comp'])
             optimizer.zero_grad()
+
+            #calculate |s2-s1|/s1 to see if gt blur is correct
+            '''
+            s2=Y[:,1,:,:]
+            s1=torch.ones_like(s2)*0.1
+            blur=torch.abs(s1-s2)/s2
+
+            torch.mean(torch.abs(blur- Y[:,0,:,:]))
+            torch.mean(Y[:,0,:,:])
+            torch.mean(blur)
+            '''
 
             '''
             import matplotlib.pyplot as plt
@@ -149,13 +178,17 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
             torch.mean(Y[:,0,:,:])
             '''
             if TRAIN_PARAMS['TRAINING_MODE'] == 2:
+                #blur |s2-s1|/s2
                 gt_step1 = Y[:, :-1, :, :]
+                #depth in m
                 gt_step2 = Y[:, -1:, :, :]
+            
+            if(True):
+                mask=(gt_step2>0.1).int()*(gt_step2<3.0).int()
+            else:
+                mask=torch.ones_like(gt_step2)
 
             stacknum = DATA_PARAMS['INP_IMG_NUM']
-            if TRAIN_PARAMS['RANDOM_LEN_INPUT'] > 0:
-                stacknum = np.random.randint(1, DATA_PARAMS['INP_IMG_NUM'])
-            Y = Y[:, :stacknum, :, :]
 
             '''
             convert blur_pix that is being estimated by the model
@@ -169,55 +202,51 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
                 #iterate through the batch
                 for i in range(X.shape[0]):
                     focus_distance=sample_batch['fdist'][i].item()
-                    #print((focus_distance-sample_batch['f'][i].item())/sample_batch['kcam'][i].item())
                     X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()
-                    #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]
             X2_fcs = X2_fcs.float().to(model_info['device_comp'])
-
-            #print("X2_fcs mean : " + str(torch.mean(X2_fcs,dim=1).mean(dim=1).mean(dim=1)))
-
+            
             # Forward and compute loss
-            output_step1, output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
-            #print('blur pred:'+str(torch.mean(output_step1).item()))
-            #print('blur gt:'+str(torch.mean(gt_step1).item()))
+            output_step1,output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum,additional_input=X2_fcs)
+            #output_step1=output_step1*(0.1-2.9e-3)*7
+            blur_sum+=torch.sum(output_step1*mask).item()/torch.sum(mask)
+            #blurpred=output_step1*(0.1-2.9e-3)*1.4398*7
+            depth_loss=criterion(output_step2*mask, gt_step2*mask)
+            blur_loss=criterion(output_step1*mask, gt_step1*mask)
+            loss=depth_loss+blur_loss
 
-            if TRAIN_PARAMS['TRAINING_MODE'] == 2:
-                loss_step1, loss_step2 = 0, 0
-                if DATA_PARAMS['FLAG_IO_DATA']['OUT_COC']:
-                    loss_step1 = criterion(output_step1, gt_step1)
-                if DATA_PARAMS['FLAG_IO_DATA']['OUT_DEPTH']:
-                    loss_step2 = criterion(output_step2, gt_step2)
-                loss = loss_step1 * TRAIN_PARAMS['MODEL1_LOSS_WEIGHT'] + loss_step2
-            elif TRAIN_PARAMS['TRAINING_MODE'] == 1:
-                loss = criterion(output_step1, Y)
-
-            outputs = output_step2
+            absloss=torch.sum(torch.abs(output_step1-gt_step1)*mask)/torch.sum(mask)
+            absloss_sum+=absloss.item()
 
             loss.backward()
             optimizer.step()
 
             # Training log
             loss_sum += loss.item()
-            blur_loss+=loss_step1.item()
-            depth_loss+=loss_step2.item()
-
             iter_count += 1.
+            blurloss_sum+=blur_loss.item()
+            depthloss_sum+=depth_loss.item()
 
-            if (st_iter + 1) % 5 == 0:
+            if (st_iter + 1) % 10 == 0:
                 print(model_info['model_name'], 'Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'
                       .format(epoch_iter + 1, TRAIN_PARAMS['EPOCHS_NUM'], st_iter + 1, model_info['total_steps'], loss_sum / iter_count))
-                
-                print('depth loss: '+str(depth_loss/iter_count))
-                print('blur loss: '+str(blur_loss/iter_count))
+                #print('abs loss: '+str(absloss_sum/iter_count))
+                #print('mean blur: '+str(blur_sum/iter_count))
+                s2loss1,s2loss2=eval(loaders,model_info)
+                #print('s2 loss1: '+str(s2loss1))
+                print('s2 loss2: '+str(s2loss2))
+                print('depth loss = '+str(depthloss_sum/iter_count))
+                print('blur loss = '+str(blurloss_sum/iter_count))
+                absloss_sum=0
+                depth_sum,blur_sum=0,0
+                depthloss_sum,blurloss_sum=0,0
 
                 total_iter = model_info['total_steps'] * epoch_iter + st_iter
-                loss_sum, iter_count,blur_loss,depth_loss = 0, 0,0,0
+                loss_sum, iter_count = 0,0
 
         # Save model
         if (epoch_iter + 1) % 10 == 0:
+            print('saving model')
             torch.save(model_info['model'].state_dict(), model_info['model_dir'] + model_info['model_name'] + '_ep' + str(0) + '.pth')
-            mean_mse=eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS)
-            print('mean MSE: '+str(mean_mse))
 
 def main():
     # Initial preparations
@@ -263,7 +292,7 @@ def main():
     print("inp_ch_num",inp_ch_num,"   out_ch_num",out_ch_num)
 
     # Run training
-    train_model(loaders=loaders, model_info=model_info,TRAIN_PARAMS=TRAIN_PARAMS, DATA_PARAMS=DATA_PARAMS)
+    train_model(loaders=loaders, model_info=model_info)
 
 if __name__ == "__main__":
     main()

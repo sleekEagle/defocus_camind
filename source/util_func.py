@@ -52,7 +52,7 @@ output |s2-s1|/s2
 '''
 def get_blur(s1,s2):
     blur=abs(s2-s1)/s2
-    return blur/3.
+    return blur
 
 '''
 All in-focus image is attached to the input matrix after the RGB image
@@ -63,7 +63,6 @@ focus_dist - available focal dists in the dataset
 req_f_indx - a list of focal dists we require. a focal dist is chosen at random each time 
 '''
 
-root_dir='C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\fs_training\\'
 class ImageDataset(torch.utils.data.Dataset):
     """Focal place dataset."""
 
@@ -72,6 +71,7 @@ class ImageDataset(torch.utils.data.Dataset):
                  f=2.9e-3,req_f_indx=[0,2], f_number=0.1, max_dpt = 3.):
 
         self.root_dir = root_dir
+        print("image data root dir : " +str(self.root_dir))
         self.transform_fnc = transform_fnc
         self.flag_shuffle = flag_shuffle
 
@@ -115,16 +115,16 @@ class ImageDataset(torch.utils.data.Dataset):
         idx_dpt = int(idx)
         img_dpt = read_dpt(self.root_dir + self.imglist_dpt[idx_dpt])
 
-        #img_dpt = np.clip(img_dpt, 0., self.max_dpt)
-        #mat_dpt = img_dpt / self.max_dpt
+        #img_dpt_scaled = np.clip(img_dpt, 0., self.max_dpt)
+        #mat_dpt_scaled = img_dpt_scaled / self.max_dpt
+        mat_dpt_scaled = img_dpt
+        mat_dpt = mat_dpt_scaled.copy()[:, :, np.newaxis]
 
         #extract N from the file name
         kcam=float(self.imglist_dpt[idx_dpt].split('_')[1])
         f=float(self.imglist_dpt[idx_dpt].split('_')[2])
 
-        mat_dpt = img_dpt.copy()[:, :, np.newaxis]
-        mat_dpt=mat_dpt/3.
-
+       
         ind = idx * self.img_num
 
         # add RGB, CoC, Depth inputs

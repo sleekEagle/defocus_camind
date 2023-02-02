@@ -159,6 +159,8 @@ class ImageDataset(torch.utils.data.Dataset):
         img_dpt = np.clip(img_dpt, 0., self.max_dpt)
         mat_dpt = img_dpt / self.max_dpt
 
+        #print(self.root_dir + self.imglist_dpt[idx_dpt])
+
         #extract N from the file name
         kcam=float(self.imglist_dpt[idx_dpt].split('_')[1])
         f=float(self.imglist_dpt[idx_dpt].split('_')[2])
@@ -173,6 +175,8 @@ class ImageDataset(torch.utils.data.Dataset):
 
         if self.flag_rgb:
             im = Image.open(self.root_dir + self.imglist_all[ind + req])
+            #print(self.root_dir + self.imglist_all[ind + req])
+            #print('*********')
             img_all = np.array(im)
             mat_all = img_all.copy() / 255.
             mats_input = np.concatenate((mats_input, mat_all), axis=2)

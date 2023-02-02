@@ -29,11 +29,11 @@ TRAIN_PARAMS = {
 DATA_PARAMS = {
     'DATA_PATH': 'C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\',
     'DATA_SET': 'fs_',
-    'DATA_NUM': 'shape',
+    'DATA_NUM': 'N1.85',
     'FLAG_NOISE': False,
     'FLAG_SHUFFLE': False,
     'INP_IMG_NUM': 1,
-    'REQ_F_IDX':[0,1,2,3,4], # the index of the focal distance aquired from the dataset. -1 for random fdist.
+    'REQ_F_IDX':[0], # the index of the focal distance aquired from the dataset. -1 for random fdist.
     'FLAG_IO_DATA': {
         'INP_RGB': True,
         'INP_COC': False,
@@ -54,7 +54,7 @@ DATA_PARAMS = {
 
 OUTPUT_PARAMS = {
     'RESULT_PATH': 'C:\\Users\\lahir\\code\\defocus\\results\\',
-    'MODEL_PATH': 'C:\\Users\\lahir\\code\\defocus\\models\\a01_dtraining_t01\\a01_dtraining_t01_ep0.pth',
+    'MODEL_PATH': 'C:\\Users\\lahir\\code\\defocus\\models\\trainingrandN1.5\\defocusnet_f0.1_dist0.15-3.0\\a01_dtrainingrandN1.5_t01_ep0.pth',
 }
 
 def forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS, stacknum=1, additional_input=None):
@@ -93,13 +93,18 @@ def main():
                     'device_comp': device_comp,
                     'model_params': model_params,
                     }
-    mse_ar=[]
+    mse_ar,s2mse=[],[]
     for st_iter, sample_batch in enumerate(loaders[0]):
         X = sample_batch['input'].float().to(model_info['device_comp'])
         Y = sample_batch['output'].float().to(model_info['device_comp'])
         if TRAIN_PARAMS['TRAINING_MODE'] == 2:
             gt_step1 = Y[:, :-1, :, :]
             gt_step2 = Y[:, -1:, :, :]
+        if(True):
+                mask=(gt_step2*3.0>0.15).int()*(gt_step2*3.0<0.5).int()
+        else:
+            mask=torch.ones_like(gt_step2)
+
         stacknum = DATA_PARAMS['INP_IMG_NUM']
         focus_dists = DATA_PARAMS['FOCUS_DIST']
         X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
@@ -109,9 +114,9 @@ def main():
                 X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance)
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         output_step1, output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
-        mse_val, ssim_val, psnr_val=util_func_defocusnet.compute_all_metrics(output_step2,gt_step2)
-        mse_ar.append(mse_val)
-    print('mse='+str(sum(mse_ar)/len(loaders[0])))
+        mse2=torch.sum(torch.square((output_step2*3-gt_step2*3)*mask)).item()/torch.sum(mask).item()
+        s2mse.append(mse2)
+    print('mse='+str(sum(s2mse)/len(s2mse)))
 
 if __name__ == "__main__":
     main()

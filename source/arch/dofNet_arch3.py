@@ -32,7 +32,7 @@ class AENet(nn.Module):
         self.num_filter = num_filter
         self.n_blocks = n_blocks
         act_fnc = nn.LeakyReLU(0.2, inplace=True)
-        self.relu=nn.ReLU()
+        self.sig=nn.Sigmoid()
 
 
         self.conv_down_0 = self.convsblocks(self.in_dim, self.num_filter * 1, act_fnc)
@@ -53,7 +53,6 @@ class AENet(nn.Module):
 
         self.conv_out = nn.Sequential(
             nn.Conv2d(self.num_filter, self.out_dim, kernel_size=3, stride=1, padding=1),
-            nn.ReLU()
         )
 
         if flag_step2:
@@ -110,7 +109,7 @@ class AENet(nn.Module):
         return pool
 
 
-    def forward(self, x, inp=3, k=8, flag_step2=False, x2=0):
+    def forward(self, x, inp=3, k=8, flag_step2=False, x2=0,parallel=True):
         down1 = []
         pool_temp = []
         for j in range(self.n_blocks + 1):
@@ -169,12 +168,11 @@ class AENet(nn.Module):
                         out = out_col
                     else:
                         out = torch.cat([out, out_col], dim=1)
-        #multiply out by (s1-f)*Kcam to make it camera independent 
-        #i.e. equal to |s1-s2|/s2
-        mul=torch.empty_like(out)
-        for i in range(out.shape[0]):
-            mul[i,:,:,:]=out[i,:,:,:]*x2[i,:,:,:]
-        
+        if(parallel):
+            mul=out
+        else:
+            mul=out*x2
+
         if flag_step2:
             down2 = []
             pool_temp = []
@@ -185,11 +183,14 @@ class AENet(nn.Module):
                         joint_pool = torch.cat([pool_temp[0], pool_max[0]], dim=1)
                         pool_temp.pop(0)
                     else:
-                        #multiply the estimated blur_pix by (s1-f)/kcam
-                        joint_pool = mul[:, 1 * i:1 * (i + 1), :, :]
-                    #print('joint_pool : '+str(joint_pool.shape))
+                        if(parallel):
+                            #print('mul:'+str(mul.shape))
+                            #print('x2:'+str(x2.shape))
+                            joint_pool = torch.cat([mul[:, 1 * i:1 * (i + 1), :, :],x2[:, 1 * i:1 * (i + 1), :, :]], dim=1)
+                            #print('jointpool:'+str(joint_pool.shape))
+                        else:
+                            joint_pool = mul[:, 1 * i:1 * (i + 1), :, :]
                     conv = self.__getattr__('conv_down2_' + str(j + 0))(joint_pool)
-                    #print('conv : '+str(conv.shape))
                     down_temp.append(conv)
 
                     pool = self.__getattr__('pool2_' + str(j + 0))(conv)
