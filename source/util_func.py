@@ -27,6 +27,7 @@ else:
     from skimage import measure
 from scipy import stats
 import math
+import matplotlib.pyplot as plt
 
 
 def _abs_val(x):
@@ -50,9 +51,9 @@ def read_dpt(img_dpt_path):
 '''
 output |s2-s1|/s2
 '''
-def get_blur(s1,s2):
-    blur=abs(s2-s1)/s2
-    return blur
+def get_blur(s1,s2,f):
+    blur=abs(s2-s1)/s2 * 1/(s1-f*1e-3)
+    return blur/10.
 
 '''
 All in-focus image is attached to the input matrix after the RGB image
@@ -115,15 +116,14 @@ class ImageDataset(torch.utils.data.Dataset):
         idx_dpt = int(idx)
         img_dpt = read_dpt(self.root_dir + self.imglist_dpt[idx_dpt])
 
-        #img_dpt_scaled = np.clip(img_dpt, 0., self.max_dpt)
-        #mat_dpt_scaled = img_dpt_scaled / self.max_dpt
+        #img_dpt_scaled = np.clip(img_dpt, 0., 1.9)
+        #mat_dpt_scaled = img_dpt_scaled / 1.9
         mat_dpt_scaled = img_dpt
         mat_dpt = mat_dpt_scaled.copy()[:, :, np.newaxis]
 
         #extract N from the file name
         kcam=float(self.imglist_dpt[idx_dpt].split('_')[1])
         f=float(self.imglist_dpt[idx_dpt].split('_')[2])
-
        
         ind = idx * self.img_num
 
@@ -144,7 +144,7 @@ class ImageDataset(torch.utils.data.Dataset):
             mats_input = np.concatenate((mats_input, mat_all), axis=2)
 
         if self.flag_coc or self.flag_out_coc:
-            img_msk = get_blur(self.focus_dist[req], img_dpt)
+            img_msk = get_blur(self.focus_dist[req], img_dpt,f)
             #img_msk = np.clip(img_msk, 0, 1.0e-4) / 1.0e-4
             mat_msk = img_msk.copy()[:, :, np.newaxis]
             if self.flag_coc:
@@ -401,3 +401,161 @@ def save_config(r, postfix="single"):
     with open(r.config['OUTPUT_PARAMS']['RESULT_PATH'] + 'configs_' + postfix + '.csv', mode='a') as res_file:
         res_writer = csv.writer(res_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         res_writer.writerow([model_name, r.config['TRAIN_PARAMS'], r.config['DATA_PARAMS'], r.config['OUTPUT_PARAMS']])
+
+
+
+def forward_pass(X, model_info, TRAIN_PARAMS,DATA_PARAMS,stacknum=1, additional_input=None,foc_dist=0):
+    flag_step2 = True if TRAIN_PARAMS['TRAINING_MODE']==2 else False
+    outputs = model_info['model'](X, model_info['inp_ch_num'], stacknum, flag_step2=flag_step2, x2 = additional_input,foc_dist=foc_dist,parallel=False)
+    return (outputs[1], outputs[0]) if TRAIN_PARAMS['TRAINING_MODE']==2 else (outputs, outputs)
+
+def eval(loader,model_info,TRAIN_PARAMS,DATA_PARAMS):
+    means2mse1,means2mse2,meanblurmse,meanblur=0,0,0,0
+    for st_iter, sample_batch in enumerate(loader):
+        X = sample_batch['input'].float().to(model_info['device_comp'])
+        Y = sample_batch['output'].float().to(model_info['device_comp'])
+        if TRAIN_PARAMS['TRAINING_MODE'] == 2:
+            gt_step1 = Y[:, :-1, :, :]
+            gt_step2 = Y[:, -1:, :, :]
+        stacknum = DATA_PARAMS['INP_IMG_NUM']
+        focus_dists = DATA_PARAMS['FOCUS_DIST']
+
+        if(True):
+            mask=(gt_step2>0.1).int()*(gt_step2<3.0).int()
+        else:
+            mask=torch.ones_like(gt_step2)
+        
+        X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
+        s1_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
+        for t in range(stacknum):
+            #iterate through the batch
+            for i in range(X.shape[0]):
+                focus_distance=sample_batch['fdist'][i].item()
+                #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()
+                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()/1.4398
+                s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)
+        X2_fcs = X2_fcs.float().to(model_info['device_comp'])
+        s1_fcs = s1_fcs.float().to(model_info['device_comp'])
+
+        output_step1,output_step2 = forward_pass(X, model_info,TRAIN_PARAMS,DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs,foc_dist=s1_fcs)
+
+        #output_step1=output_step1*(0.1-2.9e-3)*7
+        blurpred=output_step1
+        #calculate s2 provided that s2>s1
+        s2est=0.1*1./(1-blurpred)
+        #blur mse
+        blurmse=torch.sum(torch.square(output_step1-gt_step1)*mask).item()/torch.sum(mask).item()
+        meanblurmse+=blurmse
+        #calculate MSE value
+        mse1=torch.sum(torch.square(s2est-gt_step2)*mask).item()/torch.sum(mask).item()
+        #mse_val, ssim_val, psnr_val=util_func.compute_all_metrics(output_step2*mask,gt_step2*mask)
+        means2mse1+=mse1
+        mse2=torch.sum(torch.square(output_step2-gt_step2)*mask).item()/torch.sum(mask).item()
+        means2mse2+=mse2
+    
+        blur=torch.mean(output_step1).item()
+        meanblur+=blur
+        
+    return means2mse1/len(loader),means2mse2/len(loader),meanblurmse/len(loader),meanblur/len(loader)
+
+def kcamwise_blur(loader,model_info,TRAIN_PARAMS,DATA_PARAMS):
+    means2mse1,means2mse2,meanblurmse,meanblur=0,0,0,0
+    kcams_all,meanblur_all,mse_all=torch.empty(0),torch.empty(0),torch.empty(0)
+    for st_iter, sample_batch in enumerate(loader):
+        X = sample_batch['input'].float().to(model_info['device_comp'])
+        Y = sample_batch['output'].float().to(model_info['device_comp'])
+        if TRAIN_PARAMS['TRAINING_MODE'] == 2:
+            gt_step1 = Y[:, :-1, :, :]
+            gt_step2 = Y[:, -1:, :, :]
+        stacknum = DATA_PARAMS['INP_IMG_NUM']
+        focus_dists = DATA_PARAMS['FOCUS_DIST']
+
+        kcams=sample_batch['kcam']
+        kcams_all=torch.cat((kcams_all,kcams))
+
+
+        if(True):
+            mask=(gt_step2>0.1).int()*(gt_step2<3.0).int()
+        else:
+            mask=torch.ones_like(gt_step2)
+
+        X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
+        s1_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
+        for t in range(stacknum):
+            #iterate through the batch
+            for i in range(X.shape[0]):
+                focus_distance=sample_batch['fdist'][i].item()
+                #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()*10
+                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()/1.4398
+                s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)
+        X2_fcs = X2_fcs.float().to(model_info['device_comp'])
+        s1_fcs = s1_fcs.float().to(model_info['device_comp'])
+
+        output_step1,output_step2 = forward_pass(X, model_info,TRAIN_PARAMS,DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs,foc_dist=s1_fcs)
+
+        meanblur=torch.mean(output_step1,dim=2).mean(dim=2)[:,0].detach().cpu()
+        meanblur_all=torch.cat((meanblur_all,meanblur))
+        mse=torch.sum(torch.square(output_step2-gt_step2),dim=2).sum(dim=2)[:,0].detach().cpu()/torch.sum(mask,dim=2).sum(dim=2)[:,0].detach().cpu()
+        mse_all=torch.cat((mse_all,mse))
+
+    labels=torch.zeros_like(kcams_all,dtype=torch.int64)
+    #get kcam wise mean blur
+    unique_kcams, _ = kcams_all.unique(dim=0, return_counts=True)
+    for i in range(unique_kcams.shape[0]):
+        indices=((kcams_all == unique_kcams[i].item()).nonzero(as_tuple=True)[0])
+        labels[indices]=i
+    unique_labels, labels_count = labels.unique(dim=0, return_counts=True)
+    
+    blurres = torch.zeros_like(unique_labels, dtype=torch.float).scatter_add_(0, labels, meanblur_all)
+    blurres = blurres / labels_count
+    mseres = torch.zeros_like(unique_labels, dtype=torch.float).scatter_add_(0, labels, mse_all)
+    mseres = mseres / labels_count
+
+    print(unique_kcams)
+    print(blurres)
+    print(mseres)
+
+    #plot
+    unique_kcams=unique_kcams.numpy()
+    mseres=mseres.numpy()
+    blurres=blurres.numpy()
+
+    plt.scatter(unique_kcams,blurres)
+    plt.title('Blur')
+    plt.show()
+
+    plt.scatter(unique_kcams,mseres)
+    plt.title('MSE')
+    plt.show()
+
+'''
+import torch
+import matplotlib.pyplot as plt
+
+unique_kcams=torch.tensor([1.4399, 1.5839, 1.7279, 2.1598, 2.5918, 2.8798, 3.1677, 3.4557, 3.5997,
+        3.7437, 4.0317, 4.3196], dtype=torch.float64)
+
+res=torch.tensor([0.6605, 0.6040, 0.5515, 0.4596, 0.3568, 0.3073, 0.2747, 0.2672, 0.2312,
+        0.2310, 0.2126, 0.1956])
+
+res=res.numpy()
+unique_kcams=unique_kcams.numpy()
+
+plt.scatter(unique_kcams,res)
+plt.show()
+
+#calculate the actual blur that should be present at each camera based on the first blur
+res_theoratical=res[0]*unique_kcams[0]/unique_kcams
+res_corrected=res*unique_kcams
+
+
+plt.scatter(unique_kcams,res_corrected)
+plt.scatter(unique_kcams,res_theoratical)
+plt.scatter(unique_kcams,res)
+plt.show()
+'''
+
+
+
+
+

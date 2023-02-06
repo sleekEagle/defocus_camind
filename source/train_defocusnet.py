@@ -40,13 +40,13 @@ TRAIN_PARAMS = {
 }
 
 DATA_PARAMS = {
-    'DATA_PATH': 'C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\',
-    'DATA_SET': 'fs_',
-    'DATA_NUM': 'training',
+    'DATA_PATH': 'C:\\Users\\lahir\\focalstacks\\datasets\\',
+    'DATA_SET': '',
+    'DATA_NUM': 'mediumN1',
     'FLAG_NOISE': False,
     'FLAG_SHUFFLE': False,
     'INP_IMG_NUM': 1,
-    'REQ_F_IDX': [0], # list of indices of the focal distance aquired from the dataset. [] for random fdist.
+    'REQ_F_IDX': [0,1,2,3,4], # list of indices of the focal distance aquired from the dataset. [] for random fdist.
     'CRITICAL_S2':0.1,
     'FLAG_IO_DATA': {
         'INP_RGB': True,
@@ -89,7 +89,7 @@ def forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS, stacknum=1, additiona
     return (outputs[1], outputs[0]) if TRAIN_PARAMS['TRAINING_MODE']==2 else (outputs, outputs)
 
 def eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS):
-    mse_ar=[]
+    mse_ar,blurmse_ar=[],[]
     s2mse=[]
     for st_iter, sample_batch in enumerate(loaders[1]):
         X = sample_batch['input'].float().to(model_info['device_comp'])
@@ -98,8 +98,8 @@ def eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS):
             gt_step1 = Y[:, :-1, :, :]
             gt_step2 = Y[:, -1:, :, :]
 
-        if(False):
-            mask=(gt_step2*3.0>0.15).int()*(gt_step2*3.0<3.0).int()
+        if(True):
+            mask=(gt_step2*3.0>0.1).int()*(gt_step2*3.0<3.0).int()
         else:
             mask=torch.ones_like(gt_step2)
 
@@ -114,7 +114,9 @@ def eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS):
         output_step1, output_step2 = forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs)
         mse2=torch.sum(torch.square(output_step2*3-gt_step2*3)*mask).item()/torch.sum(mask).item()
         s2mse.append(mse2)
-    return sum(s2mse)/len(s2mse) 
+        blurmse=torch.sum(torch.square(output_step1-gt_step1)*mask).item()/torch.sum(mask).item()
+        blurmse_ar.append(blurmse)
+    return sum(s2mse)/len(s2mse),sum(blurmse_ar)/len(blurmse_ar)
 
 
 def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
@@ -140,8 +142,8 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
                 gt_step1 = Y[:, :-1, :, :]
                 gt_step2 = Y[:, -1:, :, :]
             
-            if(False):
-                mask=(gt_step2*3.0>0.15).int()*(gt_step2*3.0<3.0).int()
+            if(True):
+                mask=(gt_step2*3.0>0.1).int()*(gt_step2*3.0<3.0).int()
             else:
                 mask=torch.ones_like(gt_step2)
 
@@ -181,6 +183,9 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
             loss_sum += loss.item()
             iter_count += 1.
 
+            #print(torch.max(gt_step1))
+            #print(torch.min(gt_step1))
+
             if (st_iter + 1) % 5 == 0:
                 print(model_info['model_name'], 'Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'
                       .format(epoch_iter + 1, TRAIN_PARAMS['EPOCHS_NUM'], st_iter + 1, model_info['total_steps'], loss_sum / iter_count))
@@ -190,8 +195,9 @@ def train_model(loaders, model_info, TRAIN_PARAMS, DATA_PARAMS):
         # Save model
         if (epoch_iter + 1) % 10 == 0:
             torch.save(model_info['model'].state_dict(), model_info['model_dir'] + model_info['model_name'] + '_ep' + str(0) + '.pth')
-            mean_mse=eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS)
+            mean_mse,blur_error=eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS)
             print('mean MSE: '+str(mean_mse))
+            print('blur error :'+str(blur_error))
 
 def main():
     # Initial preparations
