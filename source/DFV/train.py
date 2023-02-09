@@ -10,11 +10,11 @@ import torch.utils.data
 from torch.autograd import Variable
 import torch.nn.functional as F
 import time
-from DFV.models import DFFNet
-from DFV.utils import logger, write_log
+from models import DFFNet
+from utils import logger, write_log
 torch.backends.cudnn.benchmark=True
 from glob import glob
-from DFV.dataloader import FoD500Loader
+from dataloader import FoD500Loader
 
 
 '''
@@ -39,7 +39,7 @@ parser.add_argument('--batchsize', type=int, default=20, help='samples per batch
 
 # ====== log path ==========
 parser.add_argument('--loadmodel', default=None,   help='path to pre-trained checkpoint if any')
-parser.add_argument('--savemodel', default=None, help='save path')
+parser.add_argument('--savemodel', default='C:\\Users\\lahir\\code\\defocus\\models\\', help='save path')
 parser.add_argument('--seed', type=int, default=2021, metavar='S',  help='random seed (default: 2021)')
 
 args = parser.parse_args()
@@ -187,7 +187,6 @@ def main():
 
         ## training ##
         for batch_idx, (img_stack, gt_disp, foc_dist) in enumerate(TrainImgLoader):
-            break
             start_time = time.time()
             loss, vis = train(img_stack, gt_disp, foc_dist)
 

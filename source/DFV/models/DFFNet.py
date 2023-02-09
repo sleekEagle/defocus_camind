@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.utils.data
 from .submodule import *
 import pdb
-from DFV.models.featExactor2 import FeatExactor
+from models.featExactor2 import FeatExactor
 
 # Ours-FV (use_diff=0) and Ours-DFV (use_diff=1) model
 
