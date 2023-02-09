@@ -1,1 +1,0 @@
-from .save_res import write_log
