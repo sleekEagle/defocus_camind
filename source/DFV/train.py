@@ -10,24 +10,25 @@ import torch.utils.data
 from torch.autograd import Variable
 import torch.nn.functional as F
 import time
-from source.DFV.models import DFFNet
-from source.DFV.utils import logger, write_log
+from DFV.models import DFFNet
+from DFV.utils import logger, write_log
 torch.backends.cudnn.benchmark=True
 from glob import glob
+from DFV.dataloader import FoD500Loader
+
 
 '''
 Main code for Ours-FV and Ours-DFV training 
 '''
-
-
 parser = argparse.ArgumentParser(description='DFVDFF')
 # === dataset =====
-parser.add_argument('--FoD_pth', default=None, help='FOD data path')
+parser.add_argument('--dataset', default=['FoD500'], nargs='+',  help='data Name')
+parser.add_argument('--FoD_pth', default='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\', help='FOD data path')
 parser.add_argument('--FoD_scale', default=0.2,
                     help='FoD dataset gt scale for loss balance, because FoD_GT: 0.1-1.5, DDFF12_GT 0.02-0.28, '
                          'empirically we find this scale help improve the model performance for our method and DDFF')
 # ==== hypo-param =========
-parser.add_argument('--stack_num', type=int ,default=5, help='num of image in a stack, please take a number in [2, 10]')
+parser.add_argument('--stack_num', type=int ,default=6, help='num of image in a stack in the dataset')
 parser.add_argument('--level', type=int ,default=4, help='num of layers in network, please take a number in [1, 4]')
 parser.add_argument('--use_diff', default=1, type=int, choices=[0,1], help='if use differential feat, 0: None,  1: diff cost volume')
 parser.add_argument('--lvl_w', nargs='+', default=[8./15, 4./15, 2./15, 1./15],  help='for std weight')
@@ -84,17 +85,13 @@ print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in mo
 
 # ============ data loader ==============
 #Create data loader
-    from dataloader import FoD500Loader
-    database = '/data/DFF/baseline/defocus-net/data/fs_6/' if args.FoD_pth is None else  args.FoD_pth
-    FoD500_train, FoD500_val = FoD500Loader(database, n_stack=args.stack_num, scale=args.FoD_scale)
-    FoD500_train, FoD500_val =  [FoD500_train], [FoD500_val]
-else:
-    FoD500_train, FoD500_val = [], []
+FoD500_train, FoD500_val = FoD500Loader(args.FoD_pth, n_stack=args.stack_num, scale=args.FoD_scale)
+FoD500_train, FoD500_val =  [FoD500_train], [FoD500_val]
 
-dataset_train = torch.utils.data.ConcatDataset(DDFF12_train  + FoD500_train )
-dataset_val = torch.utils.data.ConcatDataset(DDFF12_val) # we use the model perform better on  DDFF12_val
+dataset_train = torch.utils.data.ConcatDataset(FoD500_train)
+dataset_val = torch.utils.data.ConcatDataset(FoD500_val) # we use the model perform better on  DDFF12_val
 
-TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=4, batch_size=args.batchsize, shuffle=True, drop_last=True)
+TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=1, batch_size=args.batchsize, shuffle=True, drop_last=True)
 ValImgLoader = torch.utils.data.DataLoader(dataset=dataset_val, num_workers=1, batch_size=12, shuffle=False, drop_last=True)
 
 print('%d batches per epoch'%(len(TrainImgLoader)))
@@ -190,6 +187,7 @@ def main():
 
         ## training ##
         for batch_idx, (img_stack, gt_disp, foc_dist) in enumerate(TrainImgLoader):
+            break
             start_time = time.time()
             loss, vis = train(img_stack, gt_disp, foc_dist)
 

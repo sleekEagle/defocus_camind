@@ -31,7 +31,7 @@ def read_dpt(img_dpt_path):
 class ImageDataset(torch.utils.data.Dataset):
     """Focal place dataset."""
 
-    def __init__(self, root_dir, img_list, dpth_list,  transform_fnc=None, flag_shuffle=False, img_num=5, data_ratio=0,
+    def __init__(self, root_dir, img_list, dpth_list,  transform_fnc=None, flag_shuffle=False, img_num=6, data_ratio=0,
                  flag_inputs=[True, False], flag_outputs=[False, True], focus_dist=[0.1,.15,.3,0.7,1.5], f_number=0.1, scale=1):
         self.root_dir = root_dir
         self.transform_fnc = transform_fnc
@@ -60,7 +60,6 @@ class ImageDataset(torch.utils.data.Dataset):
         self.imglist_all = img_list
         self.imglist_dpt = dpth_list
 
-
     def __len__(self):
         return int(len(self.imglist_dpt))
 
@@ -77,7 +76,7 @@ class ImageDataset(torch.utils.data.Dataset):
         foc_dist = self.focus_dist.copy()
         mat_dpt = img_dpt.copy()[:, :, np.newaxis]
 
-        img_num = min(self.max_n_stack, self.img_num)
+        img_num = self.img_num
         ind = idx * img_num
 
         num_list = list(range(self.max_n_stack))
@@ -91,7 +90,7 @@ class ImageDataset(torch.utils.data.Dataset):
         pad_focs = []
         for i in range(self.max_n_stack):
             if self.flag_rgb:
-                im = Image.open(self.root_dir + self.imglist_all[ind + num_list[i]])
+                im = Image.open(self.root_dir + self.imglist_all[idx*self.img_num + num_list[i]])
                 img_all = np.array(im)
                 # img Norm
                 mat_all = img_all.copy() / 255.
@@ -188,7 +187,8 @@ class RandomFilp(object):
         return {'input': np.ascontiguousarray(inputs), 'output': np.ascontiguousarray(target)}
 
 
-
+#n_stack = number of iamges per focal stack that exist in the dataset
+#set max_n_stack in ImageDataset to change the number of images in the output 
 def FoD500Loader(data_dir, n_stack=5, scale=1, focus_dist=[0.1,.15,.3,0.7,1.5]):
 
     img_train_list = [f for f in listdir(data_dir) if isfile(join(data_dir, f)) and f[-7:] == "All.tif" and int(f[:6]) < 400]

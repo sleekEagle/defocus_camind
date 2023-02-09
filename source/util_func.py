@@ -67,14 +67,13 @@ req_f_indx - a list of focal dists we require. a focal dist is chosen at random 
 class ImageDataset(torch.utils.data.Dataset):
     """Focal place dataset."""
 
-    def __init__(self, root_dir, transform_fnc=None, flag_shuffle=False, data_ratio=0,
+    def __init__(self, root_dir, transform_fnc=None, data_ratio=0,
                  flag_inputs=[True, False,True], flag_outputs=[True, True], focus_dist=[0.1,.15,.3,0.7,1.5,100000],
-                 f=2.9e-3,req_f_indx=[0,2], f_number=0.1, max_dpt = 3.):
+                 f=2.9e-3,req_f_indx=[0,2], max_dpt = 3.):
 
         self.root_dir = root_dir
         print("image data root dir : " +str(self.root_dir))
         self.transform_fnc = transform_fnc
-        self.flag_shuffle = flag_shuffle
 
         self.flag_rgb = flag_inputs[0]
         self.flag_coc = flag_inputs[1]
@@ -178,15 +177,13 @@ def weights_init(m):
         torch.nn.init.xavier_normal(m.weight)
         m.bias.data.fill_(0.01)
 
-
-def load_data(DATA_PATH, DATA_SET, DATA_NUM, FLAG_SHUFFLE, FLAG_IO_DATA, TRAIN_SPLIT,
-              WORKERS_NUM, BATCH_SIZE, DATASET_SHUFFLE, DATA_RATIO_STRATEGY, FOCUS_DIST, REQ_F_IDX,F_NUMBER, MAX_DPT):
-    data_dir = DATA_PATH + DATA_SET + str(DATA_NUM) + '/'
+def load_data(data_dir, FLAG_IO_DATA, TRAIN_SPLIT,
+              WORKERS_NUM, BATCH_SIZE, data_ratio, FOCUS_DIST, REQ_F_IDX, MAX_DPT):
     img_dataset = ImageDataset(root_dir=data_dir, transform_fnc=transforms.Compose([ToTensor()]),
-                               flag_shuffle=FLAG_SHUFFLE, data_ratio=DATA_RATIO_STRATEGY,
+                               data_ratio=data_ratio,
                                flag_inputs=[FLAG_IO_DATA['INP_RGB'], FLAG_IO_DATA['INP_COC'],FLAG_IO_DATA['INP_AIF']],
                                flag_outputs=[FLAG_IO_DATA['OUT_COC'], FLAG_IO_DATA['OUT_DEPTH']],
-                               focus_dist=FOCUS_DIST, req_f_indx=REQ_F_IDX,f_number=F_NUMBER, max_dpt=MAX_DPT)
+                               focus_dist=FOCUS_DIST, req_f_indx=REQ_F_IDX, max_dpt=MAX_DPT)
 
     indices = list(range(len(img_dataset)))
     split = int(len(img_dataset) * TRAIN_SPLIT)
@@ -197,7 +194,7 @@ def load_data(DATA_PATH, DATA_SET, DATA_NUM, FLAG_SHUFFLE, FLAG_IO_DATA, TRAIN_S
     dataset_train = torch.utils.data.Subset(img_dataset, indices_train)
     dataset_valid = torch.utils.data.Subset(img_dataset, indices_valid)
 
-    loader_train = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=WORKERS_NUM, batch_size=BATCH_SIZE, shuffle=DATASET_SHUFFLE)
+    loader_train = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=WORKERS_NUM, batch_size=BATCH_SIZE, shuffle=True)
     loader_valid = torch.utils.data.DataLoader(dataset=dataset_valid, num_workers=1, batch_size=1, shuffle=False)
 
     total_steps = int(len(dataset_train) / BATCH_SIZE)

@@ -219,17 +219,17 @@ def train_model(loaders, model_info):
             print('blur loss = '+str(blurloss))
             print('mean blur = '+str(meanblur))
 
+importlib.reload(util_func)
 def main():
     # Initial preparations
     model_dir, model_name, res_dir = util_func.set_output_folders(OUTPUT_PARAMS, DATA_PARAMS, TRAIN_PARAMS)
     device_comp = util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
 
     # Training initializations
-    loaders, total_steps = util_func.load_data(DATA_PARAMS['DATA_PATH'],DATA_PARAMS['DATA_SET'],DATA_PARAMS['DATA_NUM'],
-    DATA_PARAMS['FLAG_SHUFFLE'],DATA_PARAMS['FLAG_IO_DATA'],DATA_PARAMS['TRAIN_SPLIT'],
-    DATA_PARAMS['WORKERS_NUM'],DATA_PARAMS['BATCH_SIZE'],DATA_PARAMS['DATASET_SHUFFLE'],DATA_PARAMS['DATA_RATIO_STRATEGY'],
-    DATA_PARAMS['FOCUS_DIST'],DATA_PARAMS['REQ_F_IDX'],
-    DATA_PARAMS['F_NUMBER'],DATA_PARAMS['MAX_DPT'])
+    data_dir='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\'
+    loaders, total_steps = util_func.load_data(data_dir,DATA_PARAMS['FLAG_IO_DATA'],DATA_PARAMS['TRAIN_SPLIT'],
+    DATA_PARAMS['WORKERS_NUM'],DATA_PARAMS['BATCH_SIZE'],DATA_PARAMS['DATA_RATIO_STRATEGY'],
+    DATA_PARAMS['FOCUS_DIST'],DATA_PARAMS['REQ_F_IDX'],DATA_PARAMS['MAX_DPT'])
 
     model, inp_ch_num, out_ch_num = util_func.load_model(model_dir, model_name,TRAIN_PARAMS, DATA_PARAMS)
     model = model.to(device=device_comp)
