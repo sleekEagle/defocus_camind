@@ -57,11 +57,30 @@ def get_blur(s1,s2,f):
 
 '''
 All in-focus image is attached to the input matrix after the RGB image
-input matrix channles 0:3 - RGB image
-                      3:6 - all in-focus image
 
 focus_dist - available focal dists in the dataset
-req_f_indx - a list of focal dists we require. a focal dist is chosen at random each time 
+req_f_indx - a list of focal dists we require.
+
+fstack=0
+a single image from the focal stack will be returned.
+The image will be randomly selected from indices in req_f_indx
+fstack=1
+several images comprising of the focal stack will be returned. 
+indices of the focal distances will be selected from req_f_indx
+
+if aif=1 : 
+    all in focus image will be appended at the begining of the focal stack
+
+input matrix channles :
+[batch,image,rgb_channel,256,256]
+
+if aif=1 and fstack=1
+image 0 : all in focus image
+image 1:-1 : focal stack
+if aif=0
+image 0:-1 : focal stack
+
+if fstack=0
 '''
 
 class ImageDataset(torch.utils.data.Dataset):
@@ -103,11 +122,7 @@ class ImageDataset(torch.utils.data.Dataset):
             #if stack is needed return all fdists from req_f_idx
             reqar=self.req_f_idx
         else:
-            if(len(self.req_f_idx)==0):
-                ### select random focal distance if req_f_idx is empty list
-                reqar=[random.randint(0,len(self.focus_dist)-1)]
-            else:
-                reqar=[random.choice(self.req_f_idx)]
+            reqar=[random.choice(self.req_f_idx)]
 
         # add RGB, CoC, Depth inputs
         mats_input = np.zeros((256, 256, 3,0))
@@ -135,6 +150,7 @@ class ImageDataset(torch.utils.data.Dataset):
             im = Image.open(self.root_dir + self.imglist_allif[idx])
             img_all = np.array(im)
             mat_all = img_all.copy() / 255.
+            mat_all=np.expand_dims(mat_all,axis=-1)
             mats_input = np.concatenate((mats_input, mat_all), axis=3)
         #loop
         for req in reqar:
@@ -176,7 +192,7 @@ def weights_init(m):
 
 def load_data(data_dir, blur,aif,train_split,fstack,
               WORKERS_NUM, BATCH_SIZE, FOCUS_DIST, REQ_F_IDX, MAX_DPT):
-    img_dataset = ImageDataset(root_dir=data_dir, transform_fnc=transforms.Compose([ToTensor()]),
+    img_dataset = ImageDataset(root_dir=data_dir,blur=blur,aif=aif,transform_fnc=transforms.Compose([ToTensor()]),
                                focus_dist=FOCUS_DIST,fstack=fstack,req_f_indx=REQ_F_IDX, max_dpt=MAX_DPT)
 
     indices = list(range(len(img_dataset)))
@@ -199,11 +215,18 @@ def load_data(data_dir, blur,aif,train_split,fstack,
     return [loader_train, loader_valid], total_steps
 
 data_dir='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\'
-loaders, total_steps = load_data(data_dir,blur=1,aif=0,train_split=0.8,fstack=1,WORKERS_NUM=0,
-BATCH_SIZE=10,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1],MAX_DPT=3.)
+loaders, total_steps = load_data(data_dir,blur=1,aif=1,train_split=0.8,fstack=1,WORKERS_NUM=0,
+BATCH_SIZE=10,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0],MAX_DPT=3.)
 
 for st_iter, sample_batch in enumerate(loaders[0]):
     break
+
+import matplotlib.pyplot as plt
+i=0
+for j in range(0,8):
+    img=sample_batch['input'][i,j,:,:,:].transpose(0,-1).detach().cpu().numpy()
+    plt.imshow(img)
+    plt.show()
 
 def load_model(model_dir, model_name, TRAIN_PARAMS, DATA_PARAMS):
     arch = importlib.import_module('arch.dofNet_arch' + str(TRAIN_PARAMS['ARCH_NUM']))
