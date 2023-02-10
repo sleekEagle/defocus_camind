@@ -67,23 +67,17 @@ req_f_indx - a list of focal dists we require. a focal dist is chosen at random 
 class ImageDataset(torch.utils.data.Dataset):
     """Focal place dataset."""
 
-    def __init__(self, root_dir, transform_fnc=None, data_ratio=0,
-                 flag_inputs=[True, False,True], flag_outputs=[True, True], focus_dist=[0.1,.15,.3,0.7,1.5,100000],
-                 f=2.9e-3,req_f_indx=[0,2], max_dpt = 3.):
+    def __init__(self, root_dir, transform_fnc=None,blur=1,aif=0,fstack=0,focus_dist=[0.1,.15,.3,0.7,1.5,100000],
+                req_f_indx=[0,2], max_dpt = 3.):
 
         self.root_dir = root_dir
         print("image data root dir : " +str(self.root_dir))
         self.transform_fnc = transform_fnc
 
-        self.flag_rgb = flag_inputs[0]
-        self.flag_coc = flag_inputs[1]
-        self.flag_aif = flag_inputs[2]
-
+        self.blur=blur
+        self.aif=aif
+        self.fstack=fstack
         self.img_num = len(focus_dist)
-        self.data_ratio = data_ratio
-
-        self.flag_out_coc = flag_outputs[0]
-        self.flag_out_depth = flag_outputs[1]
 
         self.focus_dist = focus_dist
         self.req_f_idx=req_f_indx
@@ -105,20 +99,30 @@ class ImageDataset(torch.utils.data.Dataset):
         return int(len(self.imglist_dpt))
 
     def __getitem__(self, idx):
-        ### select random focal distance if req_f_idx is empty list
-        if(len(self.req_f_idx)==0):
-            req=random.randint(0,len(self.focus_dist)-1)
+        if(self.fstack):
+            #if stack is needed return all fdists from req_f_idx
+            reqar=self.req_f_idx
         else:
-            req=random.choice(self.req_f_idx)
+            if(len(self.req_f_idx)==0):
+                ### select random focal distance if req_f_idx is empty list
+                reqar=[random.randint(0,len(self.focus_dist)-1)]
+            else:
+                reqar=[random.choice(self.req_f_idx)]
+
+        # add RGB, CoC, Depth inputs
+        mats_input = np.zeros((256, 256, 3,0))
+        mats_output = np.zeros((256, 256, 0))
 
         ##### Read and process an image
         idx_dpt = int(idx)
         img_dpt = read_dpt(self.root_dir + self.imglist_dpt[idx_dpt])
-
         #img_dpt_scaled = np.clip(img_dpt, 0., 1.9)
         #mat_dpt_scaled = img_dpt_scaled / 1.9
         mat_dpt_scaled = img_dpt
         mat_dpt = mat_dpt_scaled.copy()[:, :, np.newaxis]
+
+        #append depth to the output
+        mats_output = np.concatenate((mats_output, mat_dpt), axis=2)
 
         #extract N from the file name
         kcam=float(self.imglist_dpt[idx_dpt].split('_')[1])
@@ -126,34 +130,27 @@ class ImageDataset(torch.utils.data.Dataset):
        
         ind = idx * self.img_num
 
-        # add RGB, CoC, Depth inputs
-        mats_input = np.zeros((256, 256, 0))
-        mats_output = np.zeros((256, 256, 0))
-
-        if self.flag_rgb:
-            im = Image.open(self.root_dir + self.imglist_all[ind + req])
-            img_all = np.array(im)
-            mat_all = img_all.copy() / 255.
-            mats_input = np.concatenate((mats_input, mat_all), axis=2)
         #if all in-focus image is also needed append that to the input matrix
-        if self.flag_aif:
+        if self.aif:
             im = Image.open(self.root_dir + self.imglist_allif[idx])
             img_all = np.array(im)
             mat_all = img_all.copy() / 255.
-            mats_input = np.concatenate((mats_input, mat_all), axis=2)
+            mats_input = np.concatenate((mats_input, mat_all), axis=3)
+        #loop
+        for req in reqar:
+            im = Image.open(self.root_dir + self.imglist_all[ind + req])
+            img_all = np.array(im)
+            mat_all = img_all.copy() / 255.
+            mat_all=np.expand_dims(mat_all,axis=-1)
+            mats_input = np.concatenate((mats_input, mat_all), axis=3)
 
-        if self.flag_coc or self.flag_out_coc:
             img_msk = get_blur(self.focus_dist[req], img_dpt,f)
             #img_msk = np.clip(img_msk, 0, 1.0e-4) / 1.0e-4
             mat_msk = img_msk.copy()[:, :, np.newaxis]
-            if self.flag_coc:
-                mats_input = np.concatenate((mats_input, mat_msk), axis=2)
-            if self.flag_out_coc:
-                mats_output = np.concatenate((mats_output, mat_msk), axis=2)
 
-        if self.flag_out_depth:
-            mats_output = np.concatenate((mats_output, mat_dpt), axis=2)
-
+            #append blur to the output
+            mats_output = np.concatenate((mats_output, mat_msk), axis=2)
+        
         sample = {'input': mats_input, 'output': mats_output}
 
         if self.transform_fnc:
@@ -166,7 +163,7 @@ class ToTensor(object):
     def __call__(self, sample):
         mats_input, mats_output = sample['input'], sample['output']
 
-        mats_input = mats_input.transpose((2, 0, 1))
+        mats_input = mats_input.transpose((3,2, 0, 1))
         mats_output = mats_output.transpose((2, 0, 1))
         return {'input': torch.from_numpy(mats_input),
                 'output': torch.from_numpy(mats_output),}
@@ -177,16 +174,13 @@ def weights_init(m):
         torch.nn.init.xavier_normal(m.weight)
         m.bias.data.fill_(0.01)
 
-def load_data(data_dir, FLAG_IO_DATA, TRAIN_SPLIT,
-              WORKERS_NUM, BATCH_SIZE, data_ratio, FOCUS_DIST, REQ_F_IDX, MAX_DPT):
+def load_data(data_dir, blur,aif,train_split,fstack,
+              WORKERS_NUM, BATCH_SIZE, FOCUS_DIST, REQ_F_IDX, MAX_DPT):
     img_dataset = ImageDataset(root_dir=data_dir, transform_fnc=transforms.Compose([ToTensor()]),
-                               data_ratio=data_ratio,
-                               flag_inputs=[FLAG_IO_DATA['INP_RGB'], FLAG_IO_DATA['INP_COC'],FLAG_IO_DATA['INP_AIF']],
-                               flag_outputs=[FLAG_IO_DATA['OUT_COC'], FLAG_IO_DATA['OUT_DEPTH']],
-                               focus_dist=FOCUS_DIST, req_f_indx=REQ_F_IDX, max_dpt=MAX_DPT)
+                               focus_dist=FOCUS_DIST,fstack=fstack,req_f_indx=REQ_F_IDX, max_dpt=MAX_DPT)
 
     indices = list(range(len(img_dataset)))
-    split = int(len(img_dataset) * TRAIN_SPLIT)
+    split = int(len(img_dataset) * train_split)
 
     indices_train = indices[:split]
     indices_valid = indices[split:]
@@ -204,6 +198,12 @@ def load_data(data_dir, FLAG_IO_DATA, TRAIN_SPLIT,
 
     return [loader_train, loader_valid], total_steps
 
+data_dir='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\'
+loaders, total_steps = load_data(data_dir,blur=1,aif=0,train_split=0.8,fstack=1,WORKERS_NUM=0,
+BATCH_SIZE=10,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1],MAX_DPT=3.)
+
+for st_iter, sample_batch in enumerate(loaders[0]):
+    break
 
 def load_model(model_dir, model_name, TRAIN_PARAMS, DATA_PARAMS):
     arch = importlib.import_module('arch.dofNet_arch' + str(TRAIN_PARAMS['ARCH_NUM']))

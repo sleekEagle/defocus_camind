@@ -19,22 +19,23 @@ Main code for Ours-FV and Ours-DFV test on FoD500 dataset
 # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
 
 parser = argparse.ArgumentParser(description='DFVDFF')
-parser.add_argument('--data_path', default='/data/DFF/baseline/defocus-net/data/fs_6/',help='test data path')
-parser.add_argument('--loadmodel', default=None, help='model path')
+parser.add_argument('--data_path', default='C://Users//lahir//focalstacks//datasets//mediumN1//',help='test data path')
+parser.add_argument('--loadmodel', default='C://Users//lahir//code//defocus//models//DFV//mediumN1.tar', help='model path')
 parser.add_argument('--outdir', default='./FoD500/',help='output dir')
 
-parser.add_argument('--stack_num', type=int ,default=5, help='num of image in a stack, please take a number in [2, 10], change it according to the loaded checkpoint!')
+parser.add_argument('--stack_num', type=int ,default=6, help='num of image in a stack, please take a number in [2, 10], change it according to the loaded checkpoint!')
 parser.add_argument('--use_diff', default=1, choices=[0,1], help='if use differential images as input, change it according to the loaded checkpoint!')
 
 parser.add_argument('--level', type=int, default=4, help='num of layers in network, please take a number in [1, 4]')
 args = parser.parse_args()
 
 # !!! Only for users who download our pre-trained checkpoint, comment the next four line if you are not !!!
+'''
 if os.path.basename(args.loadmodel) == 'DFF-DFV.tar' :
     args.use_diff = 1
 else:
     args.use_diff = 0
-
+'''
 
 # dataloader
 from dataloader import FoD500Loader
