@@ -81,6 +81,9 @@ if aif=0
 image 0:-1 : focal stack
 
 if fstack=0
+
+output: [depth, blur1, blur2,]
+blur1,blur2... corresponds to the focal stack
 '''
 
 class ImageDataset(torch.utils.data.Dataset):
@@ -152,7 +155,7 @@ class ImageDataset(torch.utils.data.Dataset):
             mat_all = img_all.copy() / 255.
             mat_all=np.expand_dims(mat_all,axis=-1)
             mats_input = np.concatenate((mats_input, mat_all), axis=3)
-        #loop
+        fdist=np.zeros((0))
         for req in reqar:
             im = Image.open(self.root_dir + self.imglist_all[ind + req])
             img_all = np.array(im)
@@ -166,12 +169,13 @@ class ImageDataset(torch.utils.data.Dataset):
 
             #append blur to the output
             mats_output = np.concatenate((mats_output, mat_msk), axis=2)
+            fdist=np.concatenate((fdist,[self.focus_dist[req]]),axis=0)
         
         sample = {'input': mats_input, 'output': mats_output}
 
         if self.transform_fnc:
             sample = self.transform_fnc(sample)
-        sample = {'input': sample['input'], 'output': sample['output'],'fdist':self.focus_dist[req],'kcam':kcam,'f':f*1e-3}
+        sample = {'input': sample['input'], 'output': sample['output'],'fdist':fdist,'kcam':kcam,'f':f*1e-3}
         return sample
 
 
@@ -214,9 +218,11 @@ def load_data(data_dir, blur,aif,train_split,fstack,
 
     return [loader_train, loader_valid], total_steps
 
+'''
 data_dir='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\'
 loaders, total_steps = load_data(data_dir,blur=1,aif=1,train_split=0.8,fstack=1,WORKERS_NUM=0,
 BATCH_SIZE=10,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0],MAX_DPT=3.)
+
 
 for st_iter, sample_batch in enumerate(loaders[0]):
     break
@@ -227,6 +233,7 @@ for j in range(0,8):
     img=sample_batch['input'][i,j,:,:,:].transpose(0,-1).detach().cpu().numpy()
     plt.imshow(img)
     plt.show()
+'''
 
 def load_model(model_dir, model_name, TRAIN_PARAMS, DATA_PARAMS):
     arch = importlib.import_module('arch.dofNet_arch' + str(TRAIN_PARAMS['ARCH_NUM']))

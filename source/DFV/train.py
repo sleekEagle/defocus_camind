@@ -14,8 +14,7 @@ from models import DFFNet
 from utils import logger, write_log
 torch.backends.cudnn.benchmark=True
 from glob import glob
-from dataloader import FoD500Loader
-
+import util_func
 
 '''
 Main code for Ours-FV and Ours-DFV training 
@@ -85,15 +84,9 @@ print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in mo
 
 # ============ data loader ==============
 #Create data loader
-FoD500_train, FoD500_val = FoD500Loader(args.FoD_pth, n_stack=args.stack_num, scale=args.FoD_scale)
-FoD500_train, FoD500_val =  [FoD500_train], [FoD500_val]
-
-dataset_train = torch.utils.data.ConcatDataset(FoD500_train)
-dataset_val = torch.utils.data.ConcatDataset(FoD500_val) # we use the model perform better on  DDFF12_val
-
-TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=1, batch_size=args.batchsize, shuffle=True, drop_last=True)
-ValImgLoader = torch.utils.data.DataLoader(dataset=dataset_val, num_workers=1, batch_size=12, shuffle=False, drop_last=True)
-
+loaders, total_steps = util_func.load_data(args.FoD_pth,blur=0,aif=0,train_split=0.8,fstack=1,WORKERS_NUM=0,
+BATCH_SIZE=10,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=3.)
+TrainImgLoader,ValImgLoader=loaders[0],loaders[1]
 print('%d batches per epoch'%(len(TrainImgLoader)))
 
 
@@ -186,7 +179,12 @@ def main():
         train_log.scalar_summary('lr_epoch', lr_, epoch)
 
         ## training ##
-        for batch_idx, (img_stack, gt_disp, foc_dist) in enumerate(TrainImgLoader):
+        for batch_idx, sample_batch in enumerate(TrainImgLoader):
+            img_stack=sample_batch['input']
+            gt_disp=sample_batch['output'][:,0,:,:]
+            gt_disp=torch.unsqueeze(gt_disp,dim=1)
+            foc_dist=sample_batch['fdist']
+
             start_time = time.time()
             loss, vis = train(img_stack, gt_disp, foc_dist)
 
