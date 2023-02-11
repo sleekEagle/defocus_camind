@@ -136,7 +136,7 @@ class ImageDataset(torch.utils.data.Dataset):
         img_dpt = read_dpt(self.root_dir + self.imglist_dpt[idx_dpt])
         #img_dpt_scaled = np.clip(img_dpt, 0., 1.9)
         #mat_dpt_scaled = img_dpt_scaled / 1.9
-        mat_dpt_scaled = img_dpt
+        mat_dpt_scaled = img_dpt/self.max_dpt
         mat_dpt = mat_dpt_scaled.copy()[:, :, np.newaxis]
 
         #append depth to the output
@@ -169,7 +169,7 @@ class ImageDataset(torch.utils.data.Dataset):
 
             #append blur to the output
             mats_output = np.concatenate((mats_output, mat_msk), axis=2)
-            fdist=np.concatenate((fdist,[self.focus_dist[req]]),axis=0)
+            fdist=np.concatenate((fdist,[self.focus_dist[req]/self.max_dpt]),axis=0)
         
         sample = {'input': mats_input, 'output': mats_output}
 

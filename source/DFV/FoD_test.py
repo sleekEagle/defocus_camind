@@ -11,6 +11,9 @@ from torch.utils.data import DataLoader
 import  matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
+import sys
+sys.path.append('../')
+from source import util_func
 
 '''
 Main code for Ours-FV and Ours-DFV test on FoD500 dataset  
@@ -20,12 +23,9 @@ Main code for Ours-FV and Ours-DFV test on FoD500 dataset
 
 parser = argparse.ArgumentParser(description='DFVDFF')
 parser.add_argument('--data_path', default='C://Users//lahir//focalstacks//datasets//mediumN1//',help='test data path')
-parser.add_argument('--loadmodel', default='C://Users//lahir//code//defocus//models//DFV//mediumN1.tar', help='model path')
+parser.add_argument('--loadmodel', default='C://Users//lahir//code//defocus//models//DFV//best.tar', help='model path')
 parser.add_argument('--outdir', default='./FoD500/',help='output dir')
-
-parser.add_argument('--stack_num', type=int ,default=6, help='num of image in a stack, please take a number in [2, 10], change it according to the loaded checkpoint!')
 parser.add_argument('--use_diff', default=1, choices=[0,1], help='if use differential images as input, change it according to the loaded checkpoint!')
-
 parser.add_argument('--level', type=int, default=4, help='num of layers in network, please take a number in [1, 4]')
 args = parser.parse_args()
 
@@ -64,14 +64,21 @@ def disp2depth(disp):
 def main(image_size = (256, 256)):
     model.eval()
 
-    dataset_train, dataset_validation = FoD500Loader(args.data_path, n_stack=args.stack_num)
-    dataloader = torch.utils.data.DataLoader(dataset=dataset_validation, num_workers=1, batch_size=1, shuffle=False)
+    loaders, total_steps = util_func.load_data(args.data_path,blur=0,aif=0,train_split=0.8,fstack=1,WORKERS_NUM=0,
+    BATCH_SIZE=10,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.)
+    TrainImgLoader,ValImgLoader=loaders[0],loaders[1]
 
     # metric prepare
-    test_num = len(dataloader)
+    test_num = len(ValImgLoader)
     time_list = []
     std_sum = 0
-    for inx, (img_stack, gt_disp, foc_dist) in enumerate(dataloader):
+
+    for inx, sample_batch in enumerate(ValImgLoader):
+        img_stack=sample_batch['input'].float()
+        gt_disp=sample_batch['output'][:,0,:,:]
+        gt_disp=torch.unsqueeze(gt_disp,dim=1).float()
+        foc_dist=sample_batch['fdist'].float()
+
         # if inx not in  [5, 64,67]:continue
         if inx % 10 == 0:
             print('processing: {}/{}'.format(inx, test_num))
@@ -144,7 +151,7 @@ def main(image_size = (256, 256)):
         # time
         time_list.append('{} {}\n'.format(img_id, ttime))
 
-    print('avgUnc.', std_sum / len(dataloader))
+    print('avgUnc.', std_sum / len(ValImgLoader))
     with open('{}/{}/runtime.txt'.format(args.outdir, ckpt_name), 'w') as f:
         for line in time_list:
             f.write(line)

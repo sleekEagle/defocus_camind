@@ -14,7 +14,9 @@ from models import DFFNet
 from utils import logger, write_log
 torch.backends.cudnn.benchmark=True
 from glob import glob
-import util_func
+import sys
+sys.path.append('../')
+from source import util_func
 
 '''
 Main code for Ours-FV and Ours-DFV training 
@@ -39,7 +41,7 @@ parser.add_argument('--batchsize', type=int, default=20, help='samples per batch
 # ====== log path ==========
 parser.add_argument('--loadmodel', default=None,   help='path to pre-trained checkpoint if any')
 parser.add_argument('--savemodel', default='C:\\Users\\lahir\\code\\defocus\\models\\', help='save path')
-parser.add_argument('--seed', type=int, default=2021, metavar='S',  help='random seed (default: 2021)')
+parser.add_argument('--seed', type=int, default=2023, metavar='S',  help='random seed (default: 2021)')
 
 args = parser.parse_args()
 args.logname = '_'.join(args.dataset)
@@ -88,7 +90,6 @@ loaders, total_steps = util_func.load_data(args.FoD_pth,blur=0,aif=0,train_split
 BATCH_SIZE=10,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=3.)
 TrainImgLoader,ValImgLoader=loaders[0],loaders[1]
 print('%d batches per epoch'%(len(TrainImgLoader)))
-
 
 # =========== Train func. =========
 def train(img_stack_in, disp, foc_dist):
@@ -180,10 +181,10 @@ def main():
 
         ## training ##
         for batch_idx, sample_batch in enumerate(TrainImgLoader):
-            img_stack=sample_batch['input']
+            img_stack=sample_batch['input'].float()
             gt_disp=sample_batch['output'][:,0,:,:]
-            gt_disp=torch.unsqueeze(gt_disp,dim=1)
-            foc_dist=sample_batch['fdist']
+            gt_disp=torch.unsqueeze(gt_disp,dim=1).float()
+            foc_dist=sample_batch['fdist'].float()
 
             start_time = time.time()
             loss, vis = train(img_stack, gt_disp, foc_dist)
@@ -218,7 +219,12 @@ def main():
         # Vaild
         if epoch % 5 == 0:
             total_val_loss = 0
-            for batch_idx, (img_stack, gt_disp, foc_dist) in enumerate(ValImgLoader):
+            for batch_idx, sample_batch in enumerate(ValImgLoader):
+                img_stack=sample_batch['input'].float()
+                gt_disp=sample_batch['output'][:,0,:,:]
+                gt_disp=torch.unsqueeze(gt_disp,dim=1).float()
+                foc_dist=sample_batch['fdist'].float()
+                
                 with torch.no_grad():
                     start_time = time.time()
                     val_loss, viz = valid(img_stack, gt_disp, foc_dist)

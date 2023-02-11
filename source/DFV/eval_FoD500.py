@@ -10,7 +10,7 @@ Code for Ours-FV and Ours-DFV evaluation on FoD500 dataset
 
 # For FoD500 eval, please run ''FoD_test.py'' first and set res_path as the outdir path in ''FoD_test.py''
 parser = argparse.ArgumentParser(description='DFVDFF')
-parser.add_argument('--res_path', default='C://Users//lahir//code//defocus_camind//FoD500//DFV//', help='test result path')
+parser.add_argument('--res_path', default='C://Users//lahir//code//defocus_camind//source//FoD500//DFV//', help='test result path')
 args = parser.parse_args()
 
 
