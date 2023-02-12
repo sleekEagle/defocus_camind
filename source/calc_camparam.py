@@ -76,7 +76,6 @@ TrainImgLoader,ValImgLoader=loaders[0],loaders[1]
 s2error=0
 DFVmodel.eval()
 for st_iter, sample_batch in enumerate(loaders[0]):
-
     #predicting s2
     img_stack=sample_batch['input'].float()
     gt_disp=sample_batch['output'][:,-1,:,:]
@@ -91,8 +90,7 @@ for st_iter, sample_batch in enumerate(loaders[0]):
 
     s2error+=torch.mean(torch.square(stacked-gt_disp)).detach().cpu().item()
 
-    #calculate blur
-    X = sample_batch['input'][:,:,:,:,:].float().to(device_comp)
+    X = sample_batch['input'].float().to(device_comp)
     Y = sample_batch['output'].float().to(device_comp)
 
     gt_step1 = Y[:, :-1, :, :]
@@ -106,11 +104,19 @@ for st_iter, sample_batch in enumerate(loaders[0]):
         #iterate through the batch
         for i in range(X.shape[0]):
             focus_distance=sample_batch['fdist'][i][t].item()
-            X2_fcs[i,0, :, :] = X2_fcs[i, 0, :, :]*(focus_distance-sample_batch['f'][i].item())/1.5*sample_batch['kcam'][i].item()/1.4398
-            s1_fcs[i,0, :, :] = s1_fcs[i, 0, :, :]*(focus_distance)/1.5
+            X2_fcs[i,0, :, :] = X2_fcs[i, 0, :, :]*(focus_distance-sample_batch['f'][i].item())
+            s1_fcs[i,0, :, :] = s1_fcs[i, 0, :, :]*(focus_distance)
+        
         X2_fcs = X2_fcs.float().to(device_comp)
         s1_fcs = s1_fcs.float().to(device_comp)
-        output_step1,output_step2 = util_func.forward_pass(X[:,t,:,:,:], model_info,stacknum=stacknum, additional_input=X2_fcs,foc_dist=s1_fcs)
+        blur_pred = util_func.forward_pass(X[:,t,:,:,:], model_info,stacknum=1,flag_step2=False,additional_input=X2_fcs,foc_dist=s1_fcs)
+        #blur in pixels
+        blur_pix=blur_pred*10/1.4398
+
+        #calculate blur |s2-s1|/(s2*(s1-f)) from the DFV estimated s2
+        blur_dfv=torch.abs(stacked-s1_fcs)/stacked *1/X2_fcs
+
+        torch.mean(blur_dfv/blur_pix)
 
 
 print("MSE of depth prediction (s2) : "+str(s2error/len(loaders[0])))

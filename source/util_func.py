@@ -403,9 +403,12 @@ def save_config(r, postfix="single"):
 
 
 
-def forward_pass(X, model_info,stacknum=1, additional_input=None,foc_dist=0):
-    outputs = model_info['model'](X, model_info['inp_ch_num'], stacknum, flag_step2=True, x2 = additional_input,foc_dist=foc_dist,parallel=False)
-    return (outputs[1], outputs[0])
+def forward_pass(X, model_info,stacknum=1,flag_step2=True,additional_input=None,foc_dist=0):
+    outputs = model_info['model'](X, model_info['inp_ch_num'], stacknum, flag_step2=flag_step2, x2 = additional_input,foc_dist=foc_dist)
+    if flag_step2:
+        return (outputs[1], outputs[0])
+    else:
+        return outputs
 
 def eval(loader,model_info,scale):
     means2mse1,means2mse2,meanblurmse,meanblur=0,0,0,0
