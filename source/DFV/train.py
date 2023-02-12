@@ -182,7 +182,7 @@ def main():
         ## training ##
         for batch_idx, sample_batch in enumerate(TrainImgLoader):
             img_stack=sample_batch['input'].float()
-            gt_disp=sample_batch['output'][:,0,:,:]
+            gt_disp=sample_batch['output'][:,-1,:,:]
             gt_disp=torch.unsqueeze(gt_disp,dim=1).float()
             foc_dist=sample_batch['fdist'].float()
 

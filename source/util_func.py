@@ -139,9 +139,6 @@ class ImageDataset(torch.utils.data.Dataset):
         mat_dpt_scaled = img_dpt/self.max_dpt
         mat_dpt = mat_dpt_scaled.copy()[:, :, np.newaxis]
 
-        #append depth to the output
-        mats_output = np.concatenate((mats_output, mat_dpt), axis=2)
-
         #extract N from the file name
         kcam=float(self.imglist_dpt[idx_dpt].split('_')[1])
         f=float(self.imglist_dpt[idx_dpt].split('_')[2])
@@ -169,7 +166,10 @@ class ImageDataset(torch.utils.data.Dataset):
 
             #append blur to the output
             mats_output = np.concatenate((mats_output, mat_msk), axis=2)
-            fdist=np.concatenate((fdist,[self.focus_dist[req]/self.max_dpt]),axis=0)
+            fdist=np.concatenate((fdist,[self.focus_dist[req]]),axis=0)
+        
+        #append depth to the output
+        mats_output = np.concatenate((mats_output, mat_dpt), axis=2)
         
         sample = {'input': mats_input, 'output': mats_output}
 
@@ -235,34 +235,14 @@ for j in range(0,8):
     plt.show()
 '''
 
-def load_model(model_dir, model_name, TRAIN_PARAMS, DATA_PARAMS):
+def load_model(TRAIN_PARAMS):
     arch = importlib.import_module('arch.dofNet_arch' + str(TRAIN_PARAMS['ARCH_NUM']))
 
-    ch_inp_num = 0
-    if DATA_PARAMS['FLAG_IO_DATA']['INP_RGB']:
-        ch_inp_num += 3
-    if DATA_PARAMS['FLAG_IO_DATA']['INP_COC']:
-        ch_inp_num += 1
+    ch_inp_num = 3
+    ch_out_num = 1
 
-    ch_out_num = 0
-
-    if DATA_PARAMS['FLAG_IO_DATA']['OUT_DEPTH']:
-        ch_out_num += 1
-    ch_out_num_all = ch_out_num
-    if DATA_PARAMS['FLAG_IO_DATA']['OUT_COC']:
-        ch_out_num_all = ch_out_num + 1 * DATA_PARAMS['INP_IMG_NUM']
-        ch_out_num += 1
-
-    total_ch_inp = ch_inp_num * DATA_PARAMS['INP_IMG_NUM']
-    if TRAIN_PARAMS['ARCH_NUM'] > 0:
-        total_ch_inp = ch_inp_num
-
-        flag_step2 = False
-        if TRAIN_PARAMS['TRAINING_MODE'] == 2:
-            flag_step2 = True
-        model = arch.AENet(total_ch_inp, 1, TRAIN_PARAMS['FILTER_NUM'], flag_step2=flag_step2)
-    else:
-        model = arch.AENet(total_ch_inp, ch_out_num_all, TRAIN_PARAMS['FILTER_NUM'])
+    total_ch_inp = ch_inp_num
+    model = arch.AENet(total_ch_inp, 1, TRAIN_PARAMS['FILTER_NUM'], flag_step2=True)
     model.apply(weights_init)
 
     params = list(model.parameters())
@@ -271,10 +251,6 @@ def load_model(model_dir, model_name, TRAIN_PARAMS, DATA_PARAMS):
     pytorch_total_params_train = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print("Total number of trainable params/Total number:",
           str(pytorch_total_params_train) + "/" + str(pytorch_total_params))
-
-    if TRAIN_PARAMS['EPOCH_START'] > 0:
-        model.load_state_dict(torch.load(model_dir + model_name + '_ep' + str(TRAIN_PARAMS['EPOCH_START']) + '.pth'))
-        print("Model loaded:", model_name, " epoch:", str(TRAIN_PARAMS['EPOCH_START']))
 
     return model, ch_inp_num, ch_out_num
 
@@ -286,17 +262,13 @@ def set_comp_device(FLAG_GPU):
     return device_comp
 
 
-def set_output_folders(OUTPUT_PARAMS, DATA_PARAMS, TRAIN_PARAMS):
-    model_name = 'a' + str(TRAIN_PARAMS['ARCH_NUM']).zfill(2) + '_d' + str(DATA_PARAMS['DATA_NUM']).zfill(2) + '_t' + str(
+def set_output_folders(OUTPUT_PARAMS, TRAIN_PARAMS):
+    model_name = 'a' + str(TRAIN_PARAMS['ARCH_NUM']).zfill(2) + '_exp' + str(
         OUTPUT_PARAMS['EXP_NUM']).zfill(2)
-    res_dir = OUTPUT_PARAMS['RESULT_PATH'] + model_name + '/'
     models_dir = OUTPUT_PARAMS['MODEL_PATH'] + model_name + '/'
     if not isdir(models_dir):
         mkdir(models_dir)
-    if not isdir(res_dir):
-        mkdir(res_dir)
-    return models_dir, model_name, res_dir
-
+    return models_dir, model_name
 
 def compute_loss(Y_est, Y_gt, criterion):
     return criterion(Y_est, Y_gt)
@@ -431,21 +403,19 @@ def save_config(r, postfix="single"):
 
 
 
-def forward_pass(X, model_info, TRAIN_PARAMS,DATA_PARAMS,stacknum=1, additional_input=None,foc_dist=0):
-    flag_step2 = True if TRAIN_PARAMS['TRAINING_MODE']==2 else False
-    outputs = model_info['model'](X, model_info['inp_ch_num'], stacknum, flag_step2=flag_step2, x2 = additional_input,foc_dist=foc_dist,parallel=False)
-    return (outputs[1], outputs[0]) if TRAIN_PARAMS['TRAINING_MODE']==2 else (outputs, outputs)
+def forward_pass(X, model_info,stacknum=1, additional_input=None,foc_dist=0):
+    outputs = model_info['model'](X, model_info['inp_ch_num'], stacknum, flag_step2=True, x2 = additional_input,foc_dist=foc_dist,parallel=False)
+    return (outputs[1], outputs[0])
 
-def eval(loader,model_info,TRAIN_PARAMS,DATA_PARAMS):
+def eval(loader,model_info,scale):
     means2mse1,means2mse2,meanblurmse,meanblur=0,0,0,0
     for st_iter, sample_batch in enumerate(loader):
-        X = sample_batch['input'].float().to(model_info['device_comp'])
+        X = sample_batch['input'][:,0,:,:,:].float().to(model_info['device_comp'])
         Y = sample_batch['output'].float().to(model_info['device_comp'])
-        if TRAIN_PARAMS['TRAINING_MODE'] == 2:
-            gt_step1 = Y[:, :-1, :, :]
-            gt_step2 = Y[:, -1:, :, :]
-        stacknum = DATA_PARAMS['INP_IMG_NUM']
-        focus_dists = DATA_PARAMS['FOCUS_DIST']
+
+        gt_step1 = Y[:, :-1, :, :]
+        gt_step2 = Y[:, -1:, :, :]
+        stacknum = 1
 
         if(True):
             mask=(gt_step2>0.1).int()*(gt_step2<3.0).int()
@@ -458,13 +428,12 @@ def eval(loader,model_info,TRAIN_PARAMS,DATA_PARAMS):
             #iterate through the batch
             for i in range(X.shape[0]):
                 focus_distance=sample_batch['fdist'][i].item()
-                #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()
-                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()/1.4398
-                s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)
+                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/1.5*sample_batch['kcam'][i].item()/1.4398
+                s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/1.5
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         s1_fcs = s1_fcs.float().to(model_info['device_comp'])
 
-        output_step1,output_step2 = forward_pass(X, model_info,TRAIN_PARAMS,DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs,foc_dist=s1_fcs)
+        output_step1,output_step2 = forward_pass(X, model_info,stacknum=stacknum, additional_input=X2_fcs,foc_dist=s1_fcs)
 
         #output_step1=output_step1*(0.1-2.9e-3)*7
         blurpred=output_step1
@@ -474,10 +443,10 @@ def eval(loader,model_info,TRAIN_PARAMS,DATA_PARAMS):
         blurmse=torch.sum(torch.square(output_step1-gt_step1)*mask).item()/torch.sum(mask).item()
         meanblurmse+=blurmse
         #calculate MSE value
-        mse1=torch.sum(torch.square(s2est-gt_step2)*mask).item()/torch.sum(mask).item()
+        mse1=torch.sum(torch.square(s2est-gt_step2*scale)*mask).item()/torch.sum(mask).item()
         #mse_val, ssim_val, psnr_val=util_func.compute_all_metrics(output_step2*mask,gt_step2*mask)
         means2mse1+=mse1
-        mse2=torch.sum(torch.square(output_step2-gt_step2)*mask).item()/torch.sum(mask).item()
+        mse2=torch.sum(torch.square(output_step2*3-gt_step2)*mask).item()/torch.sum(mask).item()
         means2mse2+=mse2
     
         blur=torch.mean(output_step1).item()
@@ -485,17 +454,15 @@ def eval(loader,model_info,TRAIN_PARAMS,DATA_PARAMS):
         
     return means2mse1/len(loader),means2mse2/len(loader),meanblurmse/len(loader),meanblur/len(loader)
 
-def kcamwise_blur(loader,model_info,TRAIN_PARAMS,DATA_PARAMS):
+def kcamwise_blur(loader,model_info,scale):
     means2mse1,means2mse2,meanblurmse,meanblur=0,0,0,0
     kcams_all,meanblur_all,mse_all=torch.empty(0),torch.empty(0),torch.empty(0)
     for st_iter, sample_batch in enumerate(loader):
-        X = sample_batch['input'].float().to(model_info['device_comp'])
+        X = sample_batch['input'][:,0,:,:,:].float().to(model_info['device_comp'])
         Y = sample_batch['output'].float().to(model_info['device_comp'])
-        if TRAIN_PARAMS['TRAINING_MODE'] == 2:
-            gt_step1 = Y[:, :-1, :, :]
-            gt_step2 = Y[:, -1:, :, :]
-        stacknum = DATA_PARAMS['INP_IMG_NUM']
-        focus_dists = DATA_PARAMS['FOCUS_DIST']
+        gt_step1 = Y[:, :-1, :, :]
+        gt_step2 = Y[:, -1:, :, :]
+        stacknum = 1
 
         kcams=sample_batch['kcam']
         kcams_all=torch.cat((kcams_all,kcams))
@@ -512,17 +479,16 @@ def kcamwise_blur(loader,model_info,TRAIN_PARAMS,DATA_PARAMS):
             #iterate through the batch
             for i in range(X.shape[0]):
                 focus_distance=sample_batch['fdist'][i].item()
-                #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()*10
-                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()/1.4398
-                s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)
+                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/1.5*sample_batch['kcam'][i].item()/1.4398
+                s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/1.5
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         s1_fcs = s1_fcs.float().to(model_info['device_comp'])
 
-        output_step1,output_step2 = forward_pass(X, model_info,TRAIN_PARAMS,DATA_PARAMS,stacknum=stacknum, additional_input=X2_fcs,foc_dist=s1_fcs)
+        output_step1,output_step2 = forward_pass(X, model_info,stacknum=stacknum, additional_input=X2_fcs,foc_dist=s1_fcs)
 
         meanblur=torch.mean(output_step1,dim=2).mean(dim=2)[:,0].detach().cpu()
         meanblur_all=torch.cat((meanblur_all,meanblur))
-        mse=torch.sum(torch.square(output_step2-gt_step2),dim=2).sum(dim=2)[:,0].detach().cpu()/torch.sum(mask,dim=2).sum(dim=2)[:,0].detach().cpu()
+        mse=torch.sum(torch.square(output_step2*3-gt_step2),dim=2).sum(dim=2)[:,0].detach().cpu()/torch.sum(mask,dim=2).sum(dim=2)[:,0].detach().cpu()
         mse_all=torch.cat((mse_all,mse))
 
     labels=torch.zeros_like(kcams_all,dtype=torch.int64)

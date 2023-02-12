@@ -36,10 +36,6 @@ if os.path.basename(args.loadmodel) == 'DFF-DFV.tar' :
 else:
     args.use_diff = 0
 '''
-
-# dataloader
-from dataloader import FoD500Loader
-
 # construct model
 model = DFFNet( clean=False,level=args.level, use_diff=args.use_diff)
 model = nn.DataParallel(model)
@@ -65,7 +61,7 @@ def main(image_size = (256, 256)):
     model.eval()
 
     loaders, total_steps = util_func.load_data(args.data_path,blur=0,aif=0,train_split=0.8,fstack=1,WORKERS_NUM=0,
-    BATCH_SIZE=10,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.)
+    BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.)
     TrainImgLoader,ValImgLoader=loaders[0],loaders[1]
 
     # metric prepare
