@@ -252,3 +252,24 @@ class DDFF12Loader(Dataset):
             sample['input'] = torch.stack([sample['input'][i] for i in
                                            np.random.choice(sample['input'].shape[0], self.output_size, replace=False)])
             return sample
+
+
+database = 'C://Users//lahir//focalstacks//datasets//my_dff_trainVal.h5' 
+
+DDFF12_train = DDFF12Loader(database, stack_key="stack_train", disp_key="disp_train", n_stack=10,
+                                min_disp=0.02, max_disp=0.28)
+DDFF12_val = DDFF12Loader(database, stack_key="stack_val", disp_key="disp_val", n_stack=10,
+                                    min_disp=0.02, max_disp=0.28, b_test=False)
+DDFF12_train, DDFF12_val = [DDFF12_train], [DDFF12_val]
+
+dataset_train = torch.utils.data.ConcatDataset(DDFF12_train)
+dataset_val = torch.utils.data.ConcatDataset(DDFF12_val) # we use the model perform better on  DDFF12_val
+
+TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=0, batch_size=12, shuffle=True, drop_last=True)
+ValImgLoader = torch.utils.data.DataLoader(dataset=dataset_val, num_workers=0, batch_size=12, shuffle=False, drop_last=True)
+
+for batch_idx, (img_stack, gt_disp, foc_dist) in enumerate(TrainImgLoader):
+    break
+
+
+
