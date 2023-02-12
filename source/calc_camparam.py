@@ -26,7 +26,7 @@ TRAIN_PARAMS = {
 parser = argparse.ArgumentParser(description='defocu_camind')
 parser.add_argument('--dfvmodel', default='C://Users//lahir//code//defocus//models//DFV//best.tar', help='DFV model path')
 parser.add_argument('--camindmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='DFV model path')
-parser.add_argument('--data_path', default='C://Users//lahir//focalstacks//datasets//mediumN1//', help='data path to focal stacks')
+parser.add_argument('--data_path', default='C://Users//lahir//focalstacks//datasets//test//', help='data path to focal stacks')
 args = parser.parse_args()
 
 # construct DFV model and load weights
@@ -67,13 +67,13 @@ model_info = {'model': model,
                 }
 
 #dataloader
-loaders, total_steps = util_func.load_data(args.data_path,blur=0,aif=0,train_split=0.8,fstack=1,WORKERS_NUM=0,
+loaders, total_steps = util_func.load_data(args.data_path,blur=0,aif=0,train_split=1.0,fstack=1,WORKERS_NUM=0,
 BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.)
 TrainImgLoader,ValImgLoader=loaders[0],loaders[1]
 
 
 #calculate s2 for each focal stack
-s2error=0
+s2error,kcamsum=0,0
 DFVmodel.eval()
 for st_iter, sample_batch in enumerate(loaders[0]):
     #predicting s2
@@ -116,7 +116,7 @@ for st_iter, sample_batch in enumerate(loaders[0]):
         #calculate blur |s2-s1|/(s2*(s1-f)) from the DFV estimated s2
         blur_dfv=torch.abs(stacked-s1_fcs)/stacked *1/X2_fcs
 
-        torch.mean(blur_dfv/blur_pix)
+        kcamsum+=torch.mean(blur_dfv/blur_pix).item()
 
 
 print("MSE of depth prediction (s2) : "+str(s2error/len(loaders[0])))
