@@ -53,7 +53,7 @@ output |s2-s1|/s2
 '''
 def get_blur(s1,s2,f):
     blur=abs(s2-s1)/s2 * 1/(s1-f*1e-3)
-    return blur/10.
+    return blur/140.
 
 '''
 All in-focus image is attached to the input matrix after the RGB image
@@ -410,7 +410,7 @@ def forward_pass(X, model_info,stacknum=1,flag_step2=True,additional_input=None,
     else:
         return outputs
 
-def eval(loader,model_info,scale):
+def eval(loader,model_info,depthscale,fscale):
     means2mse1,means2mse2,meanblurmse,meanblur=0,0,0,0
     for st_iter, sample_batch in enumerate(loader):
         X = sample_batch['input'][:,0,:,:,:].float().to(model_info['device_comp'])
@@ -431,8 +431,8 @@ def eval(loader,model_info,scale):
             #iterate through the batch
             for i in range(X.shape[0]):
                 focus_distance=sample_batch['fdist'][i].item()
-                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/1.5*sample_batch['kcam'][i].item()/1.4398
-                s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/1.5
+                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*10*(focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()/1.4398
+                s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/fscale
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         s1_fcs = s1_fcs.float().to(model_info['device_comp'])
 
@@ -446,10 +446,10 @@ def eval(loader,model_info,scale):
         blurmse=torch.sum(torch.square(output_step1-gt_step1)*mask).item()/torch.sum(mask).item()
         meanblurmse+=blurmse
         #calculate MSE value
-        mse1=torch.sum(torch.square(s2est-gt_step2*scale)*mask).item()/torch.sum(mask).item()
+        mse1=torch.sum(torch.square(s2est-gt_step2)*mask).item()/torch.sum(mask).item()
         #mse_val, ssim_val, psnr_val=util_func.compute_all_metrics(output_step2*mask,gt_step2*mask)
         means2mse1+=mse1
-        mse2=torch.sum(torch.square(output_step2*3-gt_step2)*mask).item()/torch.sum(mask).item()
+        mse2=torch.sum(torch.square(output_step2*depthscale-gt_step2)*mask).item()/torch.sum(mask).item()
         means2mse2+=mse2
     
         blur=torch.mean(output_step1).item()
@@ -457,7 +457,7 @@ def eval(loader,model_info,scale):
         
     return means2mse1/len(loader),means2mse2/len(loader),meanblurmse/len(loader),meanblur/len(loader)
 
-def kcamwise_blur(loader,model_info,scale):
+def kcamwise_blur(loader,model_info,depthscale,fscale):
     means2mse1,means2mse2,meanblurmse,meanblur=0,0,0,0
     kcams_all,meanblur_all,mse_all=torch.empty(0),torch.empty(0),torch.empty(0)
     for st_iter, sample_batch in enumerate(loader):
@@ -482,8 +482,8 @@ def kcamwise_blur(loader,model_info,scale):
             #iterate through the batch
             for i in range(X.shape[0]):
                 focus_distance=sample_batch['fdist'][i].item()
-                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/1.5*sample_batch['kcam'][i].item()/1.4398
-                s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/1.5
+                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*10*(focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()/1.4398
+                s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/fscale
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         s1_fcs = s1_fcs.float().to(model_info['device_comp'])
 
@@ -491,7 +491,7 @@ def kcamwise_blur(loader,model_info,scale):
 
         meanblur=torch.mean(output_step1,dim=2).mean(dim=2)[:,0].detach().cpu()
         meanblur_all=torch.cat((meanblur_all,meanblur))
-        mse=torch.sum(torch.square(output_step2*3-gt_step2),dim=2).sum(dim=2)[:,0].detach().cpu()/torch.sum(mask,dim=2).sum(dim=2)[:,0].detach().cpu()
+        mse=torch.sum(torch.square(output_step2*depthscale-gt_step2),dim=2).sum(dim=2)[:,0].detach().cpu()/torch.sum(mask,dim=2).sum(dim=2)[:,0].detach().cpu()
         mse_all=torch.cat((mse_all,mse))
 
     labels=torch.zeros_like(kcams_all,dtype=torch.int64)

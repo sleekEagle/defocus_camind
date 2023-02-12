@@ -53,9 +53,10 @@ OUTPUT_PARAMS = {
 parser = argparse.ArgumentParser(description='camIndDefocus')
 parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\', help='blender data path')
 parser.add_argument('--bs', type=int,default=20, help='training batch size')
-parser.add_argument('--scale', default=1.0,help='divide all depths by this value')
-parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='path to the saved model')
-#parser.add_argument('--savedmodel', default=None, help='path to the saved model')
+parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
+parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
+#parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='path to the saved model')
+parser.add_argument('--savedmodel', default=None, help='path to the saved model')
 
 
 args = parser.parse_args()
@@ -81,42 +82,6 @@ def train_model(loaders, model_info):
             X = sample_batch['input'][:,0,:,:,:].float().to(model_info['device_comp'])
             Y = sample_batch['output'].float().to(model_info['device_comp'])
             optimizer.zero_grad()
-
-            #calculate |s2-s1|/s1 to see if gt blur is correct
-            '''
-            s2=Y[:,1,:,:]
-            s1=torch.ones_like(s2)*0.1
-            blur=torch.abs(s1-s2)/s2
-
-            torch.mean(torch.abs(blur- Y[:,0,:,:]))
-            torch.mean(Y[:,0,:,:])
-            torch.mean(blur)
-            '''
-            '''
-            import matplotlib.pyplot as plt
-            i=1
-            #fdist
-            sample_batch['fdist'][i]
-
-            plt.imshow(X[i,0,:,:].cpu())
-            plt.show()
-
-            #blur
-            plt.imshow(gt_step2[0,0,:,:].cpu())
-            plt.show()
-
-            #depth
-            plt.imshow(Y[i,1,:,:].cpu())
-            plt.show()
-
-            s2=Y[i,1,40,111].item()
-            s1=sample_batch['fdist'][i].item()
-            blur=abs(s1-s2)/s2
-
-            Y[i,0,40,111].item()
-
-            torch.mean(Y[:,0,:,:])
-            '''
             
             #blur (|s2-s1|/(s2*(s1-f)))
             gt_step1 = Y[:, :-1, :, :]
@@ -145,8 +110,8 @@ def train_model(loaders, model_info):
                 for i in range(X.shape[0]):
                     focus_distance=sample_batch['fdist'][i].item()
                     #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()*10
-                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/1.5
-                    s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/1.5
+                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*10*(focus_distance-sample_batch['f'][i].item())
+                    s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/args.fscale
 
             X2_fcs = X2_fcs.float().to(model_info['device_comp'])
             s1_fcs = s1_fcs.float().to(model_info['device_comp'])
@@ -156,7 +121,7 @@ def train_model(loaders, model_info):
             #output_step1=output_step1*(0.1-2.9e-3)*7
             blur_sum+=torch.sum(output_step1*mask).item()/torch.sum(mask)
             #blurpred=output_step1*(0.1-2.9e-3)*1.4398*7
-            depth_loss=criterion(output_step2*mask, gt_step2/3.0*mask)
+            depth_loss=criterion(output_step2*mask, gt_step2/args.depthscale*mask)
             blur_loss=criterion(output_step1*mask, gt_step1*mask)
             loss=depth_loss+blur_loss
 
@@ -172,14 +137,9 @@ def train_model(loaders, model_info):
             blurloss_sum+=blur_loss.item()
             depthloss_sum+=depth_loss.item()
 
-            #print(torch.max(gt_step1))
-            #print(torch.min(gt_step1))
-
             if (st_iter + 1) % 10 == 0:
                 print(model_info['model_name'], 'Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'
                       .format(epoch_iter + 1, TRAIN_PARAMS['EPOCHS_NUM'], st_iter + 1, model_info['total_steps'], loss_sum / iter_count))
-                #print('abs loss: '+str(absloss_sum/iter_count))
-                #print('mean blur: '+str(blur_sum/iter_count))
     
                 absloss_sum=0
                 depth_sum,blur_sum=0,0
@@ -192,8 +152,7 @@ def train_model(loaders, model_info):
         if (epoch_iter+1) % 10 == 0:
             print('saving model')
             torch.save(model_info['model'].state_dict(), model_info['model_dir'] + model_info['model_name'] + '_ep' + str(0) + '.pth')
-            s2loss1,s2loss2,blurloss,meanblur=util_func.eval(loaders[1],model_info,args.scale)
-            #print('s2 loss1: '+str(s2loss1))
+            s2loss1,s2loss2,blurloss,meanblur=util_func.eval(loaders[1],model_info,args.depthscale,args.fscale)
             print('s2 loss2: '+str(s2loss2))
             print('blur loss = '+str(blurloss))
             print('mean blur = '+str(meanblur))
@@ -205,7 +164,7 @@ def main():
 
     # Training initializations
     loaders, total_steps = util_func.load_data(args.blenderpth,blur=1,aif=0,train_split=0.8,fstack=0,WORKERS_NUM=0,
-    BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=args.scale)
+    BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0)
 
     model, inp_ch_num, out_ch_num = util_func.load_model(TRAIN_PARAMS)
     model = model.to(device=device_comp)
