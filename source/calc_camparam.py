@@ -80,7 +80,7 @@ for st_iter, sample_batch in enumerate(loaders[0]):
     #getting camera parameters
     kcams=sample_batch['kcam']
     kcams_all=torch.cat((kcams_all,kcams))
-    
+
     #predicting s2
     img_stack=sample_batch['input'].float()
     gt_disp=sample_batch['output'][:,-1,:,:]
@@ -104,19 +104,16 @@ for st_iter, sample_batch in enumerate(loaders[0]):
     stacknum = 5
 
     for t in range(stacknum):
-        X2_fcs = torch.ones([X.shape[0],1, X.shape[3], X.shape[4]])
         s1_fcs = torch.ones([X.shape[0],1, X.shape[3], X.shape[4]])
         #iterate through the batch
         for i in range(X.shape[0]):
             focus_distance=sample_batch['fdist'][i][t].item()
-            X2_fcs[i,0, :, :] = X2_fcs[i, 0, :, :]*(focus_distance-sample_batch['f'][i].item())
-            s1_fcs[i,0, :, :] = s1_fcs[i, 0, :, :]*(focus_distance)
+            s1_fcs[i,0, :, :] = s1_fcs[i, 0, :, :]*(focus_distance)/1.9
         
-        X2_fcs = X2_fcs.float().to(device_comp)
         s1_fcs = s1_fcs.float().to(device_comp)
-        blur_pred = util_func.forward_pass(X[:,t,:,:,:], model_info,stacknum=1,flag_step2=False,additional_input=X2_fcs,foc_dist=s1_fcs)
+        blur_pred = util_func.forward_pass(X[:,t,:,:,:], model_info,stacknum=1,flag_step2=False)
         #blur in pixels
-        blur_pix=blur_pred*10/1.4398
+        blur_pix=blur_pred*140/1.4398
 
         #calculate blur |s2-s1|/(s2*(s1-f)) from the DFV estimated s2
         blur_dfv=torch.abs(stacked-s1_fcs)/stacked *1/X2_fcs
