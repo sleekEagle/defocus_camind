@@ -270,6 +270,3 @@ ValImgLoader = torch.utils.data.DataLoader(dataset=dataset_val, num_workers=0, b
 
 for batch_idx, (img_stack, gt_disp, foc_dist) in enumerate(TrainImgLoader):
     break
-
-
-

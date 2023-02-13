@@ -26,7 +26,7 @@ TRAIN_PARAMS = {
 parser = argparse.ArgumentParser(description='defocu_camind')
 parser.add_argument('--dfvmodel', default='C://Users//lahir//code//defocus//models//DFV//best.tar', help='DFV model path')
 parser.add_argument('--camindmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='DFV model path')
-parser.add_argument('--data_path', default='C://Users//lahir//focalstacks//datasets//test//', help='data path to focal stacks')
+parser.add_argument('--data_path', default='C://Users//lahir//focalstacks//datasets//mediumN1-3_estKcam//', help='data path to focal stacks')
 args = parser.parse_args()
 
 # construct DFV model and load weights
@@ -75,7 +75,12 @@ TrainImgLoader,ValImgLoader=loaders[0],loaders[1]
 #calculate s2 for each focal stack
 s2error,kcamsum=0,0
 DFVmodel.eval()
+kcams_all=torch.empty(0)
 for st_iter, sample_batch in enumerate(loaders[0]):
+    #getting camera parameters
+    kcams=sample_batch['kcam']
+    kcams_all=torch.cat((kcams_all,kcams))
+    
     #predicting s2
     img_stack=sample_batch['input'].float()
     gt_disp=sample_batch['output'][:,-1,:,:]
