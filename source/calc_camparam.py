@@ -162,21 +162,3 @@ np.mean(reject_outliers(kcamlist,m=1))
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
