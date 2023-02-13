@@ -53,7 +53,7 @@ output |s2-s1|/s2
 '''
 def get_blur(s1,s2,f):
     blur=abs(s2-s1)/s2 * 1/(s1-f*1e-3)
-    return blur/140.
+    return blur/10.
 
 '''
 All in-focus image is attached to the input matrix after the RGB image
@@ -431,7 +431,7 @@ def eval(loader,model_info,depthscale,fscale):
             #iterate through the batch
             for i in range(X.shape[0]):
                 focus_distance=sample_batch['fdist'][i].item()
-                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*10*(focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()/1.4398
+                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/fscale*sample_batch['kcam'][i].item()/1.4398
                 s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/fscale
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         s1_fcs = s1_fcs.float().to(model_info['device_comp'])
@@ -482,7 +482,7 @@ def kcamwise_blur(loader,model_info,depthscale,fscale):
             #iterate through the batch
             for i in range(X.shape[0]):
                 focus_distance=sample_batch['fdist'][i].item()
-                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*10*(focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()/1.4398
+                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/fscale*sample_batch['kcam'][i].item()/1.4398
                 s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/fscale
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         s1_fcs = s1_fcs.float().to(model_info['device_comp'])

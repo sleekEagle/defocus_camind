@@ -26,7 +26,7 @@ TRAIN_PARAMS = {
 parser = argparse.ArgumentParser(description='defocu_camind')
 parser.add_argument('--dfvmodel', default='C://Users//lahir//code//defocus//models//DFV//best.tar', help='DFV model path')
 parser.add_argument('--camindmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='DFV model path')
-parser.add_argument('--data_path', default='C://Users//lahir//focalstacks//datasets//mediumN1-3_estKcam//', help='data path to focal stacks')
+parser.add_argument('--data_path', default='C://Users//lahir//focalstacks//datasets//mediumN1-3//', help='data path to focal stacks')
 args = parser.parse_args()
 
 # construct DFV model and load weights
@@ -71,11 +71,11 @@ loaders, total_steps = util_func.load_data(args.data_path,blur=0,aif=0,train_spl
 BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.)
 TrainImgLoader,ValImgLoader=loaders[0],loaders[1]
 
-
 #calculate s2 for each focal stack
-s2error,kcamsum=0,0
+s2error,est_kcamlist,kcamlist=0,torch.empty(0),torch.empty(0)
 DFVmodel.eval()
 kcams_all=torch.empty(0)
+
 for st_iter, sample_batch in enumerate(loaders[0]):
     #getting camera parameters
     kcams=sample_batch['kcam']
@@ -105,23 +105,63 @@ for st_iter, sample_batch in enumerate(loaders[0]):
 
     for t in range(stacknum):
         s1_fcs = torch.ones([X.shape[0],1, X.shape[3], X.shape[4]])
+        s1f = torch.ones([X.shape[0],1, X.shape[3], X.shape[4]])
         #iterate through the batch
         for i in range(X.shape[0]):
             focus_distance=sample_batch['fdist'][i][t].item()
-            s1_fcs[i,0, :, :] = s1_fcs[i, 0, :, :]*(focus_distance)/1.9
-        
+            s1_fcs[i,0, :, :] = s1_fcs[i, 0, :, :]*(focus_distance)
+            s1f[i,0, :, :] = s1f[i, 0, :, :]*(focus_distance-sample_batch['f'][i].item())
         s1_fcs = s1_fcs.float().to(device_comp)
+        s1f = s1f.float().to(device_comp)
+
         blur_pred = util_func.forward_pass(X[:,t,:,:,:], model_info,stacknum=1,flag_step2=False)
-        #blur in pixels
-        blur_pix=blur_pred*140/1.4398
 
         #calculate blur |s2-s1|/(s2*(s1-f)) from the DFV estimated s2
-        blur_dfv=torch.abs(stacked-s1_fcs)/stacked *1/X2_fcs
+        est_kcam=torch.abs(stacked-s1_fcs)/stacked*1/(s1f)*1.4398/(10*blur_pred)
+        #remove outliers
+        m=0.1
+        d=torch.abs(est_kcam-torch.median(est_kcam))
+        mdev=torch.median(d)
+        s=d/mdev
+        clean=est_kcam[s<m]
 
-        kcamsum+=torch.mean(blur_dfv/blur_pix).item()
+        est_kcamlist=torch.cat((est_kcamlist,torch.mean(clean).detach().cpu().unsqueeze(dim=0)))
+        kcamlist=torch.cat((kcamlist,sample_batch['kcam'].detach().cpu()))
 
+#get camera-wise kcam estimation
+def reject_outliers(data, m = 1):
+    d = np.abs(data - np.median(data))
+    mdev = np.median(d)
+    s = d/mdev if mdev else np.zero(len(d))
+    return data[s<m]
+
+unique_kcams, _ = kcamlist.unique(dim=0, return_counts=True)
+kcam_est_list=torch.empty((0))
+for i in range(unique_kcams.shape[0]):
+    indices=((kcamlist == unique_kcams[i].item()).nonzero(as_tuple=True)[0])
+    estkcams_i=est_kcamlist[indices]
+    #remove outliers (yes, again)
+    estkcams_i_clean=reject_outliers(estkcams_i,m=0.1)
+    kcam_est=torch.mean(estkcams_i_clean).unsqueeze(dim=0)
+    kcam_est_list=torch.cat((kcam_est_list,kcam_est))
+
+import matplotlib.pyplot as plt
+
+errors=((kcam_est_list-unique_kcams)/unique_kcams).numpy()
+plt.plot(np.abs(errors))
+plt.show()
 
 print("MSE of depth prediction (s2) : "+str(s2error/len(loaders[0])))
+print("Estimated kcam : "+str(sum(kcamlist)/len(kcamlist)))
+
+kcamlist=np.array(kcamlist)
+np.mean(reject_outliers(kcamlist,m=1))
+
+
+
+
+
+
 
 
 

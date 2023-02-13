@@ -110,14 +110,17 @@ def train_model(loaders, model_info):
                 for i in range(X.shape[0]):
                     focus_distance=sample_batch['fdist'][i].item()
                     #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()*10
-                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*10*(focus_distance-sample_batch['f'][i].item())
+                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/args.fscale
                     s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/args.fscale
 
             X2_fcs = X2_fcs.float().to(model_info['device_comp'])
             s1_fcs = s1_fcs.float().to(model_info['device_comp'])
-            
+            #print('fdist:'+str(sample_batch['fdist']))
             # Forward and compute loss
             output_step1,output_step2 = util_func.forward_pass(X, model_info,stacknum=stacknum,additional_input=X2_fcs,foc_dist=s1_fcs)
+            #print('mean blur pred:'+str(torch.mean(output_step1))+' min:'+str(torch.min(output_step1))+' max:'+str(torch.max(output_step1)))
+            #print('mean gt blur:'+str(torch.mean(gt_step1))+' min:'+str(torch.min(gt_step1))+' max:'+str(torch.max(gt_step1)))
+            #print('mean gt depth:'+str(torch.mean(gt_step2))+' min:'+str(torch.min(gt_step2))+' max:'+str(torch.max(gt_step2)))
             #output_step1=output_step1*(0.1-2.9e-3)*7
             blur_sum+=torch.sum(output_step1*mask).item()/torch.sum(mask)
             #blurpred=output_step1*(0.1-2.9e-3)*1.4398*7
@@ -201,6 +204,44 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+'''
+s1list=[0.1,0.2,1.0,1.5]
+s2list=[0.1,1.83]
+
+blur=[]
+for s1 in s1list:
+    for s2 in s2list:
+        blur.append(abs(s1-s2)/s2)
+'''
+'''
+# Initial preparations
+model_dir, model_name = util_func.set_output_folders(OUTPUT_PARAMS, TRAIN_PARAMS)
+device_comp = util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
+
+# Training initializations
+loaders, total_steps = util_func.load_data(args.blenderpth,blur=1,aif=0,train_split=0.8,fstack=0,WORKERS_NUM=0,
+BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[4],MAX_DPT=1.0)
+
+minlist,maxlist,meanlist=[],[],[]
+for st_iter, sample_batch in enumerate(loaders[0]):
+        # Setting up input and output data
+        X = sample_batch['input'][:,0,:,:,:].float().to(device_comp)
+        Y = sample_batch['output'].float().to(device_comp)
+        
+        #blur (|s2-s1|/(s2*(s1-f)))
+        gt_step1 = Y[:, :-1, :, :]
+        #depth in m
+        gt_step2 = Y[:, -1:, :, :]
+
+        minlist.append(torch.min(gt_step1).detach().cpu().item())
+        maxlist.append(torch.max(gt_step1).detach().cpu().item())
+        meanlist.append(torch.mean(gt_step1).detach().cpu().item())
+
+print('min: '+str(sum(minlist)/len(minlist)))
+print('max: '+str(sum(maxlist)/len(maxlist)))
+print('mean: '+str(sum(meanlist)/len(meanlist)))
+'''
 
 '''
 minblur,mindist=1000,1000
