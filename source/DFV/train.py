@@ -87,7 +87,7 @@ print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in mo
 # ============ data loader ==============
 #Create data loader
 loaders, total_steps = util_func.load_data(args.FoD_pth,blur=0,aif=0,train_split=0.8,fstack=1,WORKERS_NUM=0,
-BATCH_SIZE=10,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.9)
+BATCH_SIZE=args.batchsize,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.9)
 TrainImgLoader,ValImgLoader=loaders[0],loaders[1]
 print('%d batches per epoch'%(len(TrainImgLoader)))
 
