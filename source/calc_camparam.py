@@ -100,6 +100,8 @@ for st_iter, sample_batch in enumerate(loaders[0]):
 
     gt_step1 = Y[:, :-1, :, :]
     gt_step2 = Y[:, -1:, :, :]
+
+    mask=(gt_step2>0.1).int()*(gt_step2<0.3).int()
     
     stacknum = 5
 
@@ -117,7 +119,8 @@ for st_iter, sample_batch in enumerate(loaders[0]):
         blur_pred = util_func.forward_pass(X[:,t,:,:,:], model_info,stacknum=1,flag_step2=False)
 
         #calculate blur |s2-s1|/(s2*(s1-f)) from the DFV estimated s2
-        est_kcam=torch.abs(stacked-s1_fcs)/stacked*1/(s1f)*1.4398/(10*blur_pred)
+        est_kcam=torch.abs(stacked-s1_fcs)/stacked*1/(s1f)*1.4398/(10*blur_pred)*mask
+        est_kcam=est_kcam[est_kcam>0]
         #remove outliers
         m=0.1
         d=torch.abs(est_kcam-torch.median(est_kcam))
@@ -148,17 +151,11 @@ for i in range(unique_kcams.shape[0]):
 import matplotlib.pyplot as plt
 
 errors=((kcam_est_list-unique_kcams)/unique_kcams).numpy()
-plt.plot(np.abs(errors))
+
+
+plt.scatter(unique_kcams,abs(errors))
+plt.title('Depth range 0.1-1.0 m')
+plt.xlabel('Kcam')
+plt.ylabel('MSE of Kcam estimation')
 plt.show()
-
-print("MSE of depth prediction (s2) : "+str(s2error/len(loaders[0])))
-print("Estimated kcam : "+str(sum(kcamlist)/len(kcamlist)))
-
-kcamlist=np.array(kcamlist)
-np.mean(reject_outliers(kcamlist,m=1))
-
-
-
-
-
 

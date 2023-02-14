@@ -410,7 +410,7 @@ def forward_pass(X, model_info,stacknum=1,flag_step2=True,additional_input=0,foc
     else:
         return outputs
 
-def eval(loader,model_info,depthscale,fscale):
+def eval(loader,model_info,depthscale,fscale,s2limits):
     means2mse1,means2mse2,meanblurmse,meanblur=0,0,0,0
     for st_iter, sample_batch in enumerate(loader):
         X = sample_batch['input'][:,0,:,:,:].float().to(model_info['device_comp'])
@@ -420,11 +420,14 @@ def eval(loader,model_info,depthscale,fscale):
         gt_step2 = Y[:, -1:, :, :]
         stacknum = 1
 
-        if(True):
-            mask=(gt_step2>0.1).int()*(gt_step2<3.0).int()
+        if(len(s2limits)==2):
+            mask=(gt_step2>s2limits[0]).int()*(gt_step2<s2limits[1]).int()
+            s=torch.sum(mask).item()
+            if(s==0):
+                continue
         else:
             mask=torch.ones_like(gt_step2)
-        
+
         X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
         s1_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
         for t in range(stacknum):
@@ -457,9 +460,9 @@ def eval(loader,model_info,depthscale,fscale):
         
     return means2mse1/len(loader),means2mse2/len(loader),meanblurmse/len(loader),meanblur/len(loader)
 
-def kcamwise_blur(loader,model_info,depthscale,fscale):
-    means2mse1,means2mse2,meanblurmse,meanblur=0,0,0,0
-    kcams_all,meanblur_all,mse_all=torch.empty(0),torch.empty(0),torch.empty(0)
+def kcamwise_blur(loader,model_info,depthscale,fscale,s2limits):
+    means2mse1,means2mse2,meanblurmse,meanblur,meanblur_corrected=0,0,0,0,0
+    kcams_all,meanblur_all,meanblur_corrected_all,mse_all=torch.empty(0),torch.empty(0),torch.empty(0),torch.empty(0)
     for st_iter, sample_batch in enumerate(loader):
         X = sample_batch['input'][:,0,:,:,:].float().to(model_info['device_comp'])
         Y = sample_batch['output'].float().to(model_info['device_comp'])
@@ -467,14 +470,16 @@ def kcamwise_blur(loader,model_info,depthscale,fscale):
         gt_step2 = Y[:, -1:, :, :]
         stacknum = 1
 
-        kcams=sample_batch['kcam']
-        kcams_all=torch.cat((kcams_all,kcams))
-
-
-        if(True):
-            mask=(gt_step2>0.1).int()*(gt_step2<3.0).int()
+        if(len(s2limits)==2):
+            mask=(gt_step2>s2limits[0]).int()*(gt_step2<s2limits[1]).int()
+            s=torch.sum(mask).item()
+            if(s==0):
+                continue
         else:
             mask=torch.ones_like(gt_step2)
+
+        kcams=sample_batch['kcam']
+        kcams_all=torch.cat((kcams_all,kcams))
 
         X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
         s1_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
@@ -489,9 +494,12 @@ def kcamwise_blur(loader,model_info,depthscale,fscale):
 
         output_step1,output_step2 = forward_pass(X, model_info,stacknum=stacknum, additional_input=X2_fcs,foc_dist=s1_fcs)
 
-        meanblur=torch.mean(output_step1,dim=2).mean(dim=2)[:,0].detach().cpu()
+        meanblur=torch.mean(output_step1*mask,dim=2).mean(dim=2)[:,0].detach().cpu()
+        meanblur_corrected=torch.mean(output_step1*X2_fcs*fscale*mask,dim=2).mean(dim=2)[:,0].detach().cpu()
+        meanblur_corrected_all=torch.cat((meanblur_corrected_all,meanblur_corrected))
+
         meanblur_all=torch.cat((meanblur_all,meanblur))
-        mse=torch.sum(torch.square(output_step2*depthscale-gt_step2),dim=2).sum(dim=2)[:,0].detach().cpu()/torch.sum(mask,dim=2).sum(dim=2)[:,0].detach().cpu()
+        mse=torch.sum(torch.square((output_step2*depthscale-gt_step2)*mask),dim=2).sum(dim=2)[:,0].detach().cpu()/torch.sum(mask,dim=2).sum(dim=2)[:,0].detach().cpu()
         mse_all=torch.cat((mse_all,mse))
 
     labels=torch.zeros_like(kcams_all,dtype=torch.int64)
@@ -504,6 +512,10 @@ def kcamwise_blur(loader,model_info,depthscale,fscale):
     
     blurres = torch.zeros_like(unique_labels, dtype=torch.float).scatter_add_(0, labels, meanblur_all)
     blurres = blurres / labels_count
+
+    blurres_corrected = torch.zeros_like(unique_labels, dtype=torch.float).scatter_add_(0, labels, meanblur_corrected_all)
+    blurres_corrected = blurres_corrected / labels_count
+
     mseres = torch.zeros_like(unique_labels, dtype=torch.float).scatter_add_(0, labels, mse_all)
     mseres = mseres / labels_count
 
@@ -515,13 +527,25 @@ def kcamwise_blur(loader,model_info,depthscale,fscale):
     unique_kcams=unique_kcams.numpy()
     mseres=mseres.numpy()
     blurres=blurres.numpy()
+    blurres_corrected=blurres_corrected.numpy()
 
     plt.scatter(unique_kcams,blurres)
-    plt.title('Blur')
+    plt.scatter(unique_kcams,blurres_corrected)
+    plt.title('Blur vs Kcam')
+    plt.xlabel('Kcam')
+    plt.ylabel('Blur')
+    plt.show()
+
+    plt.scatter(unique_kcams,blurres_corrected)
+    plt.title('corrected Blur vs Kcam')
+    plt.xlabel('Kcam')
+    plt.ylabel('Corrected Blur')
     plt.show()
 
     plt.scatter(unique_kcams,mseres)
-    plt.title('MSE')
+    plt.title('MSE vs Kcam')
+    plt.xlabel('Kcam')
+    plt.ylabel('MSE')
     plt.show()
 
 '''

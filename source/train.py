@@ -55,8 +55,8 @@ parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\data
 parser.add_argument('--bs', type=int,default=20, help='training batch size')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
-#parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='path to the saved model')
-parser.add_argument('--savedmodel', default=None, help='path to the saved model')
+parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='path to the saved model')
+#parser.add_argument('--savedmodel', default=None, help='path to the saved model')
 
 
 args = parser.parse_args()

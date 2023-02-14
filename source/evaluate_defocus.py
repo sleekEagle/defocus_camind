@@ -37,7 +37,7 @@ DATA_PARAMS = {
     'FLAG_NOISE': False,
     'FLAG_SHUFFLE': False,
     'INP_IMG_NUM': 1,
-    'REQ_F_IDX':[0], # the index of the focal distance aquired from the dataset. -1 for random fdist.
+    'REQ_F_IDX':[0,1,2,3,4], # the index of the focal distance aquired from the dataset. -1 for random fdist.
     'FLAG_IO_DATA': {
         'INP_RGB': True,
         'INP_COC': False,
@@ -96,7 +96,7 @@ def kcamwise_blur():
                     'model_params': model_params,
                     }
     mse_ar,s2mse=[],[]
-    kcams_all,meanblur_all=torch.empty(0),torch.empty(0)
+    kcams_all,meanblur_all,mse_all=torch.empty(0),torch.empty(0),torch.empty(0)
     for st_iter, sample_batch in enumerate(loaders[0]):
         X = sample_batch['input'].float().to(model_info['device_comp'])
         Y = sample_batch['output'].float().to(model_info['device_comp'])
@@ -104,7 +104,7 @@ def kcamwise_blur():
             gt_step1 = Y[:, :-1, :, :]
             gt_step2 = Y[:, -1:, :, :]
         if(True):
-                mask=(gt_step2*3.0>0.1).int()*(gt_step2*3.0<3.0).int()
+                mask=(gt_step2*3.0>0.1).int()*(gt_step2*3.0<1.0).int()
         else:
             mask=torch.ones_like(gt_step2)
 
@@ -123,6 +123,8 @@ def kcamwise_blur():
 
         meanblur=torch.mean(output_step1,dim=2).mean(dim=2)[:,0].detach().cpu()
         meanblur_all=torch.cat((meanblur_all,meanblur))
+        mse=torch.sum(torch.square((output_step2*3-gt_step2*3)*mask),dim=2).sum(dim=2)[:,0].detach().cpu()/torch.sum(mask,dim=2).sum(dim=2)[:,0].detach().cpu()
+        mse_all=torch.cat((mse_all,mse))
 
     labels=torch.zeros_like(kcams_all,dtype=torch.int64)
 
@@ -134,8 +136,12 @@ def kcamwise_blur():
     unique_labels, labels_count = labels.unique(dim=0, return_counts=True)
     res = torch.zeros_like(unique_labels, dtype=torch.float).scatter_add_(0, labels, meanblur_all)
     res = res / labels_count
+
+    res_mse = torch.zeros_like(unique_labels, dtype=torch.float).scatter_add_(0, labels, mse_all)
+    res_mse = res_mse / labels_count
     print(unique_kcams)
     print(res)
+    print(res_mse)
 
 
 def main():
@@ -177,7 +183,7 @@ def main():
             gt_step1 = Y[:, :-1, :, :]
             gt_step2 = Y[:, -1:, :, :]
         if(True):
-                mask=(gt_step2*3.0>0.1).int()*(gt_step2*3.0<3.0).int()
+                mask=(gt_step2*3.0>0.1).int()*(gt_step2*3.0<1.0).int()
         else:
             mask=torch.ones_like(gt_step2)
 

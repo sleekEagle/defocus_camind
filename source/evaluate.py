@@ -40,7 +40,12 @@ parser.add_argument('--bs', type=int,default=1, help='training batch size')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
 parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='path to the saved model')
+parser.add_argument('--kcamest', type=int,default=1,help='use the estimated kcam parameters')
+parser.add_argument('--s2limits', nargs='+', default=[0.1,1.0],  help='the interval of depth where the errors are calculated')
 args = parser.parse_args()
+
+kcamest=[1.4923, 1.6472, 1.7558, 2.2098, 2.6737, 3.0793, 3.0704, 2.9833, 3.1075,
+        3.4795, 3.3524, 3.2369]
 
 def main():
     device_comp = util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
@@ -70,12 +75,12 @@ def main():
                     'device_comp': device_comp,
                     'model_params': model_params,
                     }
-    s2loss1,s2loss2,blurloss,meanblur=util_func.eval(loaders[0],model_info,args.depthscale,args.fscale)
+    s2loss1,s2loss2,blurloss,meanblur=util_func.eval(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits)
     print('s2 loss2: '+str(s2loss2))
     print('blur loss = '+str(blurloss))
     print('mean blur = '+str(meanblur))
 
-    util_func.kcamwise_blur(loaders[0],model_info,args.depthscale,args.fscale)
+    util_func.kcamwise_blur(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits)
     
 if __name__ == "__main__":
     main()
