@@ -6,6 +6,7 @@ from torch.utils.data import Dataset
 import torchvision
 import torch
 import h5py
+import random
 
 # code adopted from https://github.com/soyers/ddff-pytorch/blob/master/python/ddff/dataproviders/datareaders/FocalStackDDFFH5Reader.py
 
@@ -13,7 +14,7 @@ import h5py
 class DDFF12Loader(Dataset):
 
     def __init__(self, hdf5_filename,  stack_key="stack_train", disp_key="disp_train", transform=None,
-                 n_stack=10, min_disp=0.02, max_disp=0.28, b_test=False):
+                 n_stack=10, min_disp=0.02, max_disp=0.28, b_test=False,fstack=1,idx_req=[0,1,2,3,4]):
         """
         Args:
             root_dir_fs (string): Directory with all focal stacks of all image datasets.
@@ -27,6 +28,8 @@ class DDFF12Loader(Dataset):
         self.disp_key = disp_key
         self.max_n_stack = 10
         self.b_test = b_test
+        self.fstack=fstack
+        self.idx_req=idx_req
 
         assert n_stack <= self.max_n_stack, 'DDFF12 has maximum 10 images per stack!'
         self.n_stack = n_stack
@@ -34,7 +37,7 @@ class DDFF12Loader(Dataset):
 
         if transform is None:
             if 'train' in self.stack_key:
-                self.transform = self.__create_preprocessing(crop_size=(224, 224), cliprange=None, b_filp=True)
+                self.transform = self.__create_preprocessing(crop_size=(256, 256), cliprange=None, b_filp=True)
             else:
                 transform_test = [DDFF12Loader.ToTensor(),
                                   DDFF12Loader.PadSamples((384, 576)),
@@ -71,26 +74,34 @@ class DDFF12Loader(Dataset):
             sample_out = self.transform(sample)
 
         # we do not experiment more than 10
-        if self.n_stack < self.max_n_stack:
-            if 'train' in self.disp_key:
-                rand_idx = np.random.choice(self.max_n_stack, self.n_stack, replace=False) # this will shuffle order as well
-                rand_idx = np.sort(rand_idx)
+        if self.fstack==1:
+            if self.n_stack < self.max_n_stack:
+                if 'train' in self.disp_key:
+                    rand_idx = np.random.choice(self.max_n_stack, self.n_stack, replace=False) # this will shuffle order as well
+                    rand_idx = np.sort(rand_idx)
+                else:
+                    rand_idx = np.linspace(0, 9, self.n_stack)
+
+                out_imgs = sample_out['input'][rand_idx]
+                out_disp = sample_out['output']
+                disp_dist = self.disp_dist[rand_idx]
             else:
-                rand_idx = np.linspace(0, 9, self.n_stack)
+                out_imgs = sample_out['input']
+                out_disp = sample_out['output']
+                disp_dist = self.disp_dist
 
-            out_imgs = sample_out['input'][rand_idx]
-            out_disp = sample_out['output']
-            disp_dist = self.disp_dist[rand_idx]
+            if 'val' in self.disp_key and (not self.b_test):
+                out_disp = out_disp[:, :256, :256]
+                out_imgs = out_imgs[:,:, :256, :256]
+
         else:
-            out_imgs = sample_out['input']
+            #select one index from the ind_req
+            selected_idx=random.choice(self.idx_req)
+            out_imgs = sample_out['input'][selected_idx]
             out_disp = sample_out['output']
-            disp_dist = self.disp_dist
+            disp_dist = self.disp_dist[selected_idx]
 
-        if 'val' in self.disp_key and (not self.b_test):
-            out_disp = out_disp[:, :256, :256]
-            out_imgs = out_imgs[:,:, :256, :256]
-
-        return out_imgs, out_disp, disp_dist #sample_out['input'], sample_out['output'].squeeze()#, sample['input']
+        return out_imgs, out_disp, disp_dist
 
     def __create_preprocessing(self, crop_size=None, cliprange=[0.0202, 0.2825], mean=[0.485, 0.456, 0.406],
                                std=[0.229, 0.224, 0.225], b_filp=True):
@@ -138,7 +149,8 @@ class DDFF12Loader(Dataset):
             samples = sample['input']
 
             for i, sample_input in enumerate(samples):
-                img_lst.append(torchvision.transforms.functional.normalize(sample_input, mean=self.mean_input, std=self.std_input))
+                #img_lst.append(torchvision.transforms.functional.normalize(sample_input, mean=self.mean_input, std=self.std_input))
+                img_lst.append((sample_input-torch.min(sample_input))/(torch.max(sample_input)-torch.min(sample_input)))
             input_images = torch.stack(img_lst)
 
             if self.mean_output is None or self.std_output is None:
@@ -256,17 +268,48 @@ class DDFF12Loader(Dataset):
 
 database = 'C://Users//lahir//focalstacks//datasets//my_dff_trainVal.h5' 
 
-DDFF12_train = DDFF12Loader(database, stack_key="stack_train", disp_key="disp_train", n_stack=10,
-                                min_disp=0.02, max_disp=0.28)
-DDFF12_val = DDFF12Loader(database, stack_key="stack_val", disp_key="disp_val", n_stack=10,
-                                    min_disp=0.02, max_disp=0.28, b_test=False)
-DDFF12_train, DDFF12_val = [DDFF12_train], [DDFF12_val]
+def print_stats(database):
+    DDFF12_train = DDFF12Loader(database, stack_key="stack_train", disp_key="disp_train", n_stack=10,
+                                    min_disp=0.02, max_disp=0.28,fstack=0,idx_req=[9,8,0])
+    DDFF12_val = DDFF12Loader(database, stack_key="stack_val", disp_key="disp_val", n_stack=10,
+                                        min_disp=0.02, max_disp=0.28, b_test=False,fstack=0,idx_req=[9,8,0])
+    DDFF12_train, DDFF12_val = [DDFF12_train], [DDFF12_val]
 
-dataset_train = torch.utils.data.ConcatDataset(DDFF12_train)
-dataset_val = torch.utils.data.ConcatDataset(DDFF12_val) # we use the model perform better on  DDFF12_val
+    dataset_train = torch.utils.data.ConcatDataset(DDFF12_train)
+    dataset_val = torch.utils.data.ConcatDataset(DDFF12_val) # we use the model perform better on  DDFF12_val
 
-TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=0, batch_size=12, shuffle=True, drop_last=True)
-ValImgLoader = torch.utils.data.DataLoader(dataset=dataset_val, num_workers=0, batch_size=12, shuffle=False, drop_last=True)
+    TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=0, batch_size=12, shuffle=True, drop_last=True)
+    ValImgLoader = torch.utils.data.DataLoader(dataset=dataset_val, num_workers=0, batch_size=12, shuffle=False, drop_last=True)
 
-for batch_idx, (img_stack, gt_disp, foc_dist) in enumerate(TrainImgLoader):
-    break
+    print('stats for train data')
+    xmin,xmax,xmean,count=100,0,0,0
+    for batch_idx, (img_stack, gt_disp, foc_dist) in enumerate(TrainImgLoader):
+
+        xmin_=torch.min(img_stack).cpu().item()
+        if(xmin_<xmin):
+            xmin=xmin_
+        xmax_=torch.max(img_stack).cpu().item()
+        if(xmax_>xmax):
+            xmax=xmax_
+        xmean+=torch.mean(img_stack).cpu().item()
+        count+=1
+    print('X min='+str(xmin))
+    print('X max='+str(xmax))
+    print('X mean='+str(xmean/count))
+
+    print('_________')
+    print('stats for validataion data')
+    xmin,xmax,xmean,count=100,0,0,0
+    for batch_idx, (img_stack, gt_disp, foc_dist) in enumerate(ValImgLoader):
+
+        xmin_=torch.min(img_stack).cpu().item()
+        if(xmin_<xmin):
+            xmin=xmin_
+        xmax_=torch.max(img_stack).cpu().item()
+        if(xmax_>xmax):
+            xmax=xmax_
+        xmean+=torch.mean(img_stack).cpu().item()
+        count+=1
+    print('X min='+str(xmin))
+    print('X max='+str(xmax))
+    print('X mean='+str(xmean/count))

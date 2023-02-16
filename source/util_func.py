@@ -548,6 +548,42 @@ def kcamwise_blur(loader,model_info,depthscale,fscale,s2limits):
     plt.ylabel('MSE')
     plt.show()
 
+datapath='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\'
+def get_data_stats(datapath):
+    loaders, total_steps = load_data(datapath,blur=1,aif=0,train_split=0.8,fstack=0,WORKERS_NUM=0,
+        BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0)
+    print('stats of train data')
+    get_loader_stats(loaders[0])
+    print('______')
+
+#data statistics of the input images
+def get_loader_stats(loader):
+   
+    device_comp = set_comp_device(True)
+    xmin,xmax,xmean,count=100,0,0,0
+    for st_iter, sample_batch in enumerate(loader):
+        # Setting up input and output data
+        X = sample_batch['input'][:,0,:,:,:].float().to(device_comp)
+        Y = sample_batch['output'].float().to(device_comp)
+
+        xmin_=torch.min(X).cpu().item()
+        if(xmin_<xmin):
+            xmin=xmin_
+        xmax_=torch.max(X).cpu().item()
+        if(xmax_>xmax):
+            xmax=xmax_
+        xmean+=torch.mean(X).cpu().item()
+        count+=1
+    
+        #blur (|s2-s1|/(s2*(s1-f)))
+        gt_step1 = Y[:, :-1, :, :]
+        #depth in m
+        gt_step2 = Y[:, -1:, :, :]
+
+    print('X min='+str(xmin))
+    print('X max='+str(xmax))
+    print('X mean='+str(xmean/count))
+
 '''
 import torch
 import matplotlib.pyplot as plt
@@ -574,6 +610,25 @@ plt.scatter(unique_kcams,res_theoratical)
 plt.scatter(unique_kcams,res)
 plt.show()
 '''
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+def_mse=np.array([0.0500, 0.0427, 0.0477, 0.0547, 0.0737, 0.0723, 0.0948, 0.0746, 0.0870,0.0942, 0.0833, 0.1003])
+our_mse=np.array([0.0582, 0.0586, 0.0583, 0.0528, 0.0528, 0.0478, 0.0592, 0.0567, 0.0521,0.0680, 0.0543, 0.0624])
+f_numbers=np.array([1.0000, 1.1000, 1.2000, 1.5000, 1.8000, 2.0000, 2.1999, 2.4000, 2.5000,2.6000, 2.8000, 2.9999])
+
+l1=plt.scatter(f_numbers,def_mse)
+l2=plt.scatter(f_numbers,our_mse)
+plt.title('MSE vs f-number')
+plt.xlabel('f-number')
+plt.ylabel('MSE m^2')
+l1.set_label('defocusnet')
+l2.set_label('our model')
+plt.legend()
+plt.show()
+
+
 
 
 
