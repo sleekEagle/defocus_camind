@@ -20,6 +20,7 @@ from sacred import Experiment
 import csv
 import util_func
 import argparse
+from dataloaders import DDFF12,focalblender
 
 TRAIN_PARAMS = {
     'ARCH_NUM': 3,
@@ -55,10 +56,9 @@ parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\data
 parser.add_argument('--bs', type=int,default=20, help='training batch size')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
-parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='path to the saved model')
-#parser.add_argument('--savedmodel', default=None, help='path to the saved model')
-
-
+#parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='path to the saved model')
+parser.add_argument('--savedmodel', default=None, help='path to the saved model')
+parser.add_argument('--s2limits', nargs='+', default=[0.1,3.0],  help='the interval of depth where the errors are calculated')
 args = parser.parse_args()
 
 # ============ init ===============
@@ -154,8 +154,8 @@ def train_model(loaders, model_info):
         # Save model
         if (epoch_iter+1) % 10 == 0:
             print('saving model')
-            torch.save(model_info['model'].state_dict(), model_info['model_dir'] + model_info['model_name'] + '_ep' + str(0) + '.pth')
-            s2loss1,s2loss2,blurloss,meanblur=util_func.eval(loaders[1],model_info,args.depthscale,args.fscale)
+            #torch.save(model_info['model'].state_dict(), model_info['model_dir'] + model_info['model_name'] + '_ep' + str(0) + '.pth')
+            s2loss1,s2loss2,blurloss,meanblur=util_func.eval(loaders[1],model_info,args.depthscale,args.fscale,args.s2limits)
             print('s2 loss2: '+str(s2loss2))
             print('blur loss = '+str(blurloss))
             print('mean blur = '+str(meanblur))
@@ -166,7 +166,7 @@ def main():
     device_comp = util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
 
     # Training initializations
-    loaders, total_steps = util_func.load_data(args.blenderpth,blur=1,aif=0,train_split=0.8,fstack=0,WORKERS_NUM=0,
+    loaders, total_steps = focalblender.load_data(args.blenderpth,blur=1,aif=0,train_split=0.8,fstack=0,WORKERS_NUM=0,
     BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0)
 
     model, inp_ch_num, out_ch_num = util_func.load_model(TRAIN_PARAMS)
