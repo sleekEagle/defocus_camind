@@ -28,6 +28,7 @@ else:
 from scipy import stats
 import math
 import matplotlib.pyplot as plt
+import sys
 
 def weights_init(m):
     if type(m) == nn.Conv2d:
@@ -227,31 +228,47 @@ def forward_pass(X, model_info,stacknum=1,flag_step2=True,additional_input=0,foc
     else:
         return outputs
 
-def eval(loader,model_info,depthscale,fscale,s2limits):
+def eval(loader,model_info,depthscale,fscale,s2limits,dataset=None,kcam=0,f=0):
     means2mse1,means2mse2,meanblurmse,meanblur=0,0,0,0
+    print('Total samples = '+str(len(loader)))
     for st_iter, sample_batch in enumerate(loader):
-        X = sample_batch['input'][:,0,:,:,:].float().to(model_info['device_comp'])
-        Y = sample_batch['output'].float().to(model_info['device_comp'])
+        #sys.stdout.write(str(st_iter)+" of "+str(len(loader))+" is done")
+        sys.stdout.write("\r%d is done"%st_iter)
+        sys.stdout.flush()
+        
+        if(dataset=='ddff'):
+            img_stack, gt_disp, foc_dist=sample_batch
+            X=img_stack.float().to(model_info['device_comp'])
+            Y=gt_disp.float().to(model_info['device_comp'])
+            gt_step2=Y
+        if(dataset=='blender'):
+            X = sample_batch['input'][:,0,:,:,:].float().to(model_info['device_comp'])
+            Y = sample_batch['output'].float().to(model_info['device_comp'])
+            gt_step1 = Y[:, :-1, :, :]
+            gt_step2 = Y[:, -1:, :, :]
 
-        gt_step1 = Y[:, :-1, :, :]
-        gt_step2 = Y[:, -1:, :, :]
         stacknum = 1
 
         if(len(s2limits)==2):
             mask=(gt_step2>s2limits[0]).int()*(gt_step2<s2limits[1]).int()
             s=torch.sum(mask).item()
+            #continue loop if there are no ground truth data in the range we are interested in
             if(s==0):
                 continue
         else:
             mask=torch.ones_like(gt_step2)
-
+        
         X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
         s1_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
         for t in range(stacknum):
             #iterate through the batch
             for i in range(X.shape[0]):
-                focus_distance=sample_batch['fdist'][i].item()
-                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/fscale*sample_batch['kcam'][i].item()/1.4398
+                if(dataset=='blender'):
+                    focus_distance=sample_batch['fdist'][i].item()
+                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/fscale*sample_batch['kcam'][i].item()/1.4398
+                elif(dataset=='ddff'):
+                    focus_distance=foc_dist[i].item()
+                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-f)/fscale*kcam/1.4398
                 s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/fscale
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         s1_fcs = s1_fcs.float().to(model_info['device_comp'])
@@ -263,8 +280,9 @@ def eval(loader,model_info,depthscale,fscale,s2limits):
         #calculate s2 provided that s2>s1
         s2est=0.1*1./(1-blurpred)
         #blur mse
-        blurmse=torch.sum(torch.square(output_step1-gt_step1)*mask).item()/torch.sum(mask).item()
-        meanblurmse+=blurmse
+        if(dataset=='blender'):
+            blurmse=torch.sum(torch.square(output_step1-gt_step1)*mask).item()/torch.sum(mask).item()
+            meanblurmse+=blurmse
         #calculate MSE value
         mse1=torch.sum(torch.square(s2est-gt_step2)*mask).item()/torch.sum(mask).item()
         #mse_val, ssim_val, psnr_val=util_func.compute_all_metrics(output_step2*mask,gt_step2*mask)

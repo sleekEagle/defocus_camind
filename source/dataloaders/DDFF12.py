@@ -41,6 +41,7 @@ class DDFF12Loader(Dataset):
             else:
                 transform_test = [DDFF12Loader.ToTensor(),
                                   DDFF12Loader.PadSamples((384, 576)),
+                                  DDFF12Loader.RandomCrop(256, 256),
                                   DDFF12Loader.Normalize(mean_input=[0.485, 0.456, 0.406],
                                                          std_input=[0.229, 0.224, 0.225])]
                 self.transform =  torchvision.transforms.Compose(transform_test) #self.__create_preprocessing()
@@ -272,7 +273,7 @@ def print_loader_stats(loader):
     xmin,xmax,xmean,count=100,0,0,0
     depthmin,depthmax,depthmean=100,0,0
     for batch_idx, (img_stack, gt_disp, foc_dist) in enumerate(loader):
-
+        print(batch_idx)
         xmin_=torch.min(img_stack).cpu().item()
         if(xmin_<xmin):
             xmin=xmin_
@@ -307,8 +308,8 @@ def get_stats(database):
     dataset_train = torch.utils.data.ConcatDataset(DDFF12_train)
     dataset_val = torch.utils.data.ConcatDataset(DDFF12_val) # we use the model perform better on  DDFF12_val
 
-    TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=0, batch_size=12, shuffle=True, drop_last=True)
-    ValImgLoader = torch.utils.data.DataLoader(dataset=dataset_val, num_workers=0, batch_size=12, shuffle=False, drop_last=True)
+    TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=0, batch_size=1, shuffle=True, drop_last=True)
+    ValImgLoader = torch.utils.data.DataLoader(dataset=dataset_val, num_workers=0, batch_size=1, shuffle=False, drop_last=True)
 
     print('stats for train data')
     print_loader_stats(TrainImgLoader)

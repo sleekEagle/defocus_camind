@@ -9,6 +9,8 @@ import numpy as np
 import importlib
 import util_func
 import argparse
+from dataloaders import DDFF12,focalblender
+
 
 
 TRAIN_PARAMS = {
@@ -36,6 +38,8 @@ OUTPUT_PARAMS = {
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
 parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1-3\\', help='blender data path')
+parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
+parser.add_argument('--dataset', default='ddff', help='blender data path')
 parser.add_argument('--bs', type=int,default=1, help='training batch size')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
@@ -49,8 +53,23 @@ kcamest=[1.4923, 1.6472, 1.7558, 2.2098, 2.6737, 3.0793, 3.0704, 2.9833, 3.1075,
 
 def main():
     device_comp = util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
-    loaders, total_steps = util_func.load_data(args.blenderpth,blur=1,aif=0,train_split=1.,fstack=0,WORKERS_NUM=0,
-    BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1)
+    #load the required dataset
+    if(args.dataset=='blender'):
+        loaders, total_steps = focalblender.load_data(args.blenderpth,blur=1,aif=0,train_split=1.,fstack=0,WORKERS_NUM=0,
+        BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1)
+    elif(args.dataset=='ddff'):
+        DDFF12_train = DDFF12.DDFF12Loader(args.ddffpth, stack_key="stack_train", disp_key="disp_train", n_stack=10,
+                                    min_disp=0.02, max_disp=0.28,fstack=0,idx_req=[9,8,0])
+        DDFF12_val = DDFF12.DDFF12Loader(args.ddffpth, stack_key="stack_val", disp_key="disp_val", n_stack=10,
+                                            min_disp=0.02, max_disp=0.28, b_test=False,fstack=0,idx_req=[9,8,0])
+        DDFF12_train, DDFF12_val = [DDFF12_train], [DDFF12_val]
+
+        dataset_train = torch.utils.data.ConcatDataset(DDFF12_train)
+        dataset_val = torch.utils.data.ConcatDataset(DDFF12_val) # we use the model perform better on  DDFF12_val
+
+        TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=0, batch_size=1, shuffle=True, drop_last=True)
+        ValImgLoader = torch.utils.data.DataLoader(dataset=dataset_val, num_workers=0, batch_size=1, shuffle=False, drop_last=True)
+
 
     model, inp_ch_num, out_ch_num = util_func.load_model(TRAIN_PARAMS)
     model = model.to(device=device_comp)
@@ -69,22 +88,27 @@ def main():
         model.load_state_dict(model_dict)
 
     model_info = {'model': model,
-                    'total_steps': total_steps,
                     'inp_ch_num': inp_ch_num,
                     'out_ch_num':out_ch_num,
                     'device_comp': device_comp,
                     'model_params': model_params,
                     }
-    s2loss1,s2loss2,blurloss,meanblur=util_func.eval(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits)
-    print('s2 loss2: '+str(s2loss2))
-    print('blur loss = '+str(blurloss))
-    print('mean blur = '+str(meanblur))
+    if(args.dataset=='blender'):           
+        s2loss1,s2loss2,blurloss,meanblur=util_func.eval(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits)
+    elif(args.dataset=='ddff'):
+        for kcam in range(40,100):
+            print('kcam='+str(kcam/10))
+            s2loss1,s2loss2,blurloss,meanblur=util_func.eval(TrainImgLoader,model_info,args.depthscale,args.fscale,args.s2limits,
+            dataset=args.dataset,kcam=kcam/10,f=3e-3)
 
-    util_func.kcamwise_blur(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits)
+            print('s2 loss2: '+str(s2loss2))
+            print('blur loss = '+str(blurloss))
+            print('mean blur = '+str(meanblur))
+
+    if(args.dataset=='blender'):
+        util_func.kcamwise_blur(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits)
     
 if __name__ == "__main__":
     main()
-    
-    
     
 
