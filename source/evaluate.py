@@ -94,16 +94,16 @@ def main():
                     'model_params': model_params,
                     }
     if(args.dataset=='blender'):           
-        s2loss1,s2loss2,blurloss,meanblur=util_func.eval(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits)
+        s2loss1,s2loss2,blurloss,meanblur=util_func.eval(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,
+        dataset=args.dataset)
     elif(args.dataset=='ddff'):
-        for kcam in range(40,100):
-            print('kcam='+str(kcam/10))
-            s2loss1,s2loss2,blurloss,meanblur=util_func.eval(TrainImgLoader,model_info,args.depthscale,args.fscale,args.s2limits,
-            dataset=args.dataset,kcam=kcam/10,f=3e-3)
+        print('DDFF dataset Evaluation')
+        s2loss1,s2loss2,blurloss,meanblur=util_func.eval(TrainImgLoader,model_info,args.depthscale,args.fscale,args.s2limits,
+        dataset=args.dataset,kcam=0,f=3e-3)
 
-            print('s2 loss2: '+str(s2loss2))
-            print('blur loss = '+str(blurloss))
-            print('mean blur = '+str(meanblur))
+        print('s2 loss2: '+str(s2loss2))
+        print('blur loss = '+str(blurloss))
+        print('mean blur = '+str(meanblur))
 
     if(args.dataset=='blender'):
         util_func.kcamwise_blur(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits)

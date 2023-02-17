@@ -235,7 +235,7 @@ def eval(loader,model_info,depthscale,fscale,s2limits,dataset=None,kcam=0,f=0):
         #sys.stdout.write(str(st_iter)+" of "+str(len(loader))+" is done")
         sys.stdout.write("\r%d is done"%st_iter)
         sys.stdout.flush()
-        
+
         if(dataset=='ddff'):
             img_stack, gt_disp, foc_dist=sample_batch
             X=img_stack.float().to(model_info['device_comp'])
