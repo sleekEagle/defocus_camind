@@ -236,7 +236,6 @@ def main():
                     print('[val] epoch %d : %d/%d val_loss = %.6f , time = %.2f' % (epoch, batch_idx, len(ValImgLoader), val_loss, time.time() - start_time))
                 total_val_loss += val_loss
 
-
             avg_val_loss = total_val_loss / len(ValImgLoader)
             err_thres = 0.05 # for validation purpose
             write_log(viz, img_stack[:, 0], img_stack[:, -1], gt_disp, val_log, epoch, thres=err_thres)
