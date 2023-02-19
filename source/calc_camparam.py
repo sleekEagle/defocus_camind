@@ -34,7 +34,7 @@ parser.add_argument('--camindmodel', default='C:\\Users\\lahir\\code\\defocus\\m
 parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\', help='blender data path')
 parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
 parser.add_argument('--dataset', default='blender', help='DFV model path')
-parser.add_argument('--s2limits', nargs='+', default=[0.01,1.0],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--s2limits', nargs='+', default=[0,1.0],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
 args = parser.parse_args()
@@ -93,12 +93,13 @@ if(args.dataset=='ddff'):
 
     TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=0, batch_size=1, shuffle=True, drop_last=True)
     ValImgLoader = torch.utils.data.DataLoader(dataset=dataset_val, num_workers=0, batch_size=1, shuffle=False, drop_last=True)
-    f=3e-3
+f=3e-3
 
 #calculate s2 for each focal stack
-def method1():
+def est_f(f=3e-3):
     s2error,est_kcamlist,kcamlist=0,torch.empty(0),torch.empty(0)
-    ulist,vlist=torch.empty(0),torch.empty(0)
+    meanf=0
+    count=0
     for st_iter, sample_batch in enumerate(TrainImgLoader):
         print(st_iter)
         if(st_iter>10):
@@ -129,14 +130,13 @@ def method1():
 
         s2error+=torch.mean(torch.square(stacked*args.depthscale-gt_disp)*mask).detach().cpu().item()
 
-        print('mask '+str(mask.shape))
-
         stacknum = X.shape[1]
         bs=X.shape[0]
         #iterate though the batch
-        s1_fcs = torch.ones([bs, stacknum, X.shape[3], X.shape[4]])
+        s1=torch.ones([bs, stacknum, X.shape[3], X.shape[4]])
+        s1f=torch.ones([bs, stacknum, X.shape[3], X.shape[4]])
         blur_preds = torch.ones([bs, stacknum, X.shape[3], X.shape[4]])
-        lmd=torch.ones([bs, stacknum, X.shape[3], X.shape[4]])
+        stacked=stacked.to("cpu")
         for i in range(bs):
             #iterate through the focal stack
             for t in range(stacknum):
@@ -144,99 +144,44 @@ def method1():
                     focus_distance=foc_dist[i][t].item()
                 if(args.dataset=='blender'):
                     focus_distance=sample_batch['fdist'][i][t].item()                
-                s1_fcs[i,t, :, :] = s1_fcs[i,t, :, :]*(focus_distance)
-                s1_fcs = s1_fcs.float().to(device_comp)
+                s1[i,t, :, :] = s1[i,t, :, :]*(focus_distance)
+                s1f[i,t, :, :] = s1f[i,t, :, :]*(focus_distance-f)
                 img=torch.unsqueeze(X[i,t,:,:,:],dim=0)
                 blur_pred = util_func.forward_pass(img, model_info,stacknum=1,flag_step2=False)
-                blur_preds[i,t,:,:]=blur_pred*10/1.4398
-                lmd[i,t,:,:]=torch.abs(gt_step2-s1_fcs[i,t,:,:])/(gt_step2)
+                blur_preds[i,t,:,:]=blur_pred
 
-
-        lmd[0,0,200,100]
-
-        torch.abs(gt_step2[0,0,200,100]-s1_fcs[0,0,200,100])/(gt_step2[0,0,200,100])
-
-        b1=blur_preds[0,0,200,100]
-        bi=blur_preds[0,1,200,100]
-        l1=lmd[0,0,200,100]
-        li=lmd[0,1,200,100]
-        s11=s1_fcs[0,0,200,100]
-        s1i=s1_fcs[0,1,200,100]
-
-        f=(b1/bi*s11 - l1/li*s1i)/(b1/b1-l1/li)
-
-
-        lmd_last=lmd[:,-1,:,:].unsqueeze(dim=1)
-        lmd=lmd/lmd_last
-        blur_preds_last=blur_preds[:,-1,:,:].unsqueeze(dim=1)
-        blur_preds=blur_preds/blur_preds_last
-
-        s1=s1_fcs.detach().cpu()
-        s1_last=torch.repeat_interleave(torch.unsqueeze(s1[:,-1,:,:],dim=1),repeats=lmd.shape[1],dim=1)
-        f=(blur_preds*s1 - lmd*s1_last)/(blur_preds-lmd)
-        f=f[:,0:-4,:,:]*torch.repeat_interleave(mask,repeats=4,dim=1).cpu()
-        f=f[f>0]
-        f=f[f<10]
-        torch.mean(f)
-
-
-                #we cannot estimate kcam or f when there is no blur
-                v=s1_fcs[mask>0].detach().cpu()
-                u=(torch.abs(gt_step2-s1_fcs)/(gt_step2)*1.4398/(10*blur_pred))[mask>0].detach().cpu()
-                kcamest=
-
-                #torch.mean(u[u>0]/v[v>0])
-
-                vlist=torch.cat((vlist,v[v>0]))
-                ulist=torch.cat((ulist,u[u>0]))
-
-                torch.mean(ulist/vlist)
-                vlistnp=np.expand_dims(vlist.numpy(),axis=1)
-                ulistnp=np.expand_dims(ulist.numpy(),axis=1)
-
-                _ = plt.hist(vlistnp, bins='auto')
-                plt.show()
-
-                np.mean((ulistnp-3e-3)/vlistnp)
-
-                import matplotlib.pyplot as plt
-                plt.scatter(vlistnp,ulistnp)
-                plt.show()
-                from sklearn import linear_model, datasets
-
-                ransac = linear_model.RANSACRegressor(min_samples=10000)
-                ransac.fit(ulistnp,vlistnp)
-                print(1/ransac.estimator_.coef_)
-                ransac.estimator_.intercept_
-
-                lr = linear_model.LinearRegression()
-                lr.fit(ulistnp,vlistnp)
-                print(1/lr.coef_)
-
-                plt.scatter(vlistnp,ulistnp)
-                plt.show()
-
-                slope, intercept, r_value, p_value, std_err = stats.linregress(ulistnp,vlistnp)
-                1/slope
-            
-
-                #calculate blur |s2-s1|/(s2*(s1-f)) from the DFV estimated s2
-                est_kcam=torch.abs(stacked-s1_fcs)/stacked*1/(s1f)*1.4398/(10*blur_pred)*mask
+                s1f_=s1f[i,t, :, :].unsqueeze(dim=0).unsqueeze(dim=1)
+                s1_=s1[i,t, :, :].unsqueeze(dim=0).unsqueeze(dim=1)
+                est_kcam=torch.abs(gt_step2.cpu()-s1_)/(gt_step2.cpu())*1/(s1f_)*1.4398/(10*blur_pred.cpu())*mask.cpu()
                 est_kcam=est_kcam[est_kcam>0]
-                #remove outliers
-                m=0.1
-                d=torch.abs(est_kcam-torch.median(est_kcam))
-                mdev=torch.median(d)
-                s=d/mdev
-                clean=est_kcam[s<m]
-                #if there are no items meeting the criteria, continue.
-                if(len(clean)==0):
-                    continue
-                est_kcamlist=torch.cat((est_kcamlist,torch.mean(clean).detach().cpu().unsqueeze(dim=0)))
+                est_kcamlist=torch.cat((est_kcamlist,torch.mean(est_kcam).detach().cpu().unsqueeze(dim=0)))
                 if(args.dataset=='blender'):
                     kcamlist=torch.cat((kcamlist,sample_batch['kcam'].detach().cpu()))
 
-    #get camera-wise kcam estimation
+        #estimating f
+        for i in range(stacknum):
+            for j in range(stacknum):
+                if(i==j):
+                    continue
+                s1_1=s1[:,i,:,:].unsqueeze(dim=1)
+                blur_=blur_preds[:,i,:,:].unsqueeze(dim=1)
+                bigmask=(blur_>0.01).int()
+                l1=torch.abs(gt_step2.cpu()-s1_1)/(gt_step2.cpu())/(blur_)
+                bigmask*=(torch.abs(gt_step2.cpu()-s1_1)>0.01).int()
+                s1_2=s1[:,j,:,:].unsqueeze(dim=1)
+                blur_=blur_preds[:,j,:,:].unsqueeze(dim=1)
+                bigmask*=(blur_>0.01).int()
+                l2=torch.abs(gt_step2.cpu()-s1_2)/(gt_step2.cpu())/(blur_)
+                bigmask*=(torch.abs(gt_step2.cpu()-s1_2)>0.01).int()
+
+                m=l1/l2
+
+                f_est=(s1_1-m*s1_2)/(1-m)*mask.cpu()*bigmask
+                meanf+=torch.mean(f_est[f_est>0]).item()
+                count+=1
+    print('estimated f = '+str(meanf/count))
+
+    #estimating Kcam
     def reject_outliers(data, m = 1):
         d = np.abs(data - np.median(data))
         mdev = np.median(d)
@@ -261,78 +206,15 @@ def method1():
         plt.xlabel('Kcam')
         plt.ylabel('MSE of Kcam estimation')
         plt.show()
+        print('real kcams: '+str(unique_kcams.tolist()))
+        print('estimated kcams: '+str(kcam_est_list.tolist()))
 
     if(args.dataset=='ddff'):
         est_kcamlist_list=reject_outliers(est_kcamlist,m=0.1)
         print("Estimated Kcam = "+str(torch.mean(est_kcamlist_list).item()))
 
-#grid search based method to find both kcam and f
-#this takes a longer time due to grid-search
-s2error,est_kcamlist,kcamlist=0,torch.empty(0),torch.empty(0)
-count=0
-kcam=4.7073
-f=3e-3
-
-s2loss1,s2loss2,blurloss,meanblur=util_func.eval(TrainImgLoader,model_info,args.depthscale,args.fscale,args.s2limits,
-                                dataset=args.dataset,kcam=15,f=0.079)   
-
-for st_iter, sample_batch in enumerate(TrainImgLoader):
-    if(st_iter==10):
-        break
-    print(st_iter)
-    if(args.dataset=='ddff'):
-        img_stack, gt_disp, foc_dist=sample_batch
-        foc_dist=foc_dist/1.9
-
-        X=img_stack.float().to(device_comp)
-        Y=gt_disp.float().to(device_comp)
-        gt_step2=Y
-    if(args.dataset=='blender'):
-        X = sample_batch['input'][:,0,:,:,:].float().to(device_comp)
-        Y = sample_batch['output'].float().to(device_comp)
-        gt_step1 = Y[:, :-1, :, :]
-        gt_step2 = Y[:, -1:, :, :]
-
-        #preparing data for the DFV model to predict s2
-        img_stack=sample_batch['input'].float()
-        gt_disp=sample_batch['output'][:,-1,:,:]
-        gt_disp=torch.unsqueeze(gt_disp,dim=1).float()
-        foc_dist=sample_batch['fdist'].float()
-        foc_dist=foc_dist/1.9
-
-    img_stack_in   = Variable(torch.FloatTensor(img_stack))
-    gt_disp    = Variable(torch.FloatTensor(gt_disp))
-    img_stack, gt_disp, foc_dist = img_stack_in.cuda(),  gt_disp.cuda(), foc_dist.cuda()
-    stacked, stds, _ = DFVmodel(img_stack, foc_dist)
-
-    mask=(gt_step2>args.s2limits[0]).int()*(gt_step2<args.s2limits[1]).int()
-
-    stacknum = X.shape[1]
-    bs=X.shape[0]
-    #iterate though the batch
-    for i in range(bs):
-        #iterate through the focal stack
-        for t in range(stacknum):
-            X2_fcs = torch.ones([1, 1, X.shape[3], X.shape[4]])
-            s1_fcs = torch.ones([1, 1, X.shape[3], X.shape[4]])
-            if(args.dataset=='blender'):
-                focus_distance=sample_batch['fdist'][i][t].item()
-            elif(args.dataset=='ddff'):
-                focus_distance=foc_dist[i][t].item()
-            X2_fcs[:, :, :, :] = X2_fcs[:,:, :, :]*(focus_distance-f)/1.9*kcam/1.4398
-            s1_fcs[:,:, :, :] = s1_fcs[:,:, :, :]*(focus_distance)/1.9
-            X2_fcs = X2_fcs.float().to(model_info['device_comp'])
-            s1_fcs = s1_fcs.float().to(model_info['device_comp'])
-            #predict depth whith camind model
-            img=torch.unsqueeze(X[i,t,:,:,:],dim=0)
-            output_step1,output_step2 = util_func.forward_pass(img, model_info,stacknum=1, additional_input=X2_fcs,foc_dist=s1_fcs)
-            s2error+=torch.mean(torch.square(output_step2*1.9-gt_step2)*mask).detach().cpu().item()
-            count+=1
-s2error/count
-    
-
 def main():
-    method1()
+    est_f()
 
 if __name__ == "__main__":
     main()
