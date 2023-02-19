@@ -228,7 +228,7 @@ def forward_pass(X, model_info,stacknum=1,flag_step2=True,additional_input=0,foc
     else:
         return outputs
 
-def eval(loader,model_info,depthscale,fscale,s2limits,dataset=None,kcam=0,f=0):
+def eval(loader,model_info,depthscale,fscale,s2limits,dataset=None,kcam=0,f=0,alt_gt=None):
     means2mse1,means2mse2,meanblurmse,meanblur=0,0,0,0
     print('Total samples = '+str(len(loader)))
     for st_iter, sample_batch in enumerate(loader):
@@ -272,7 +272,6 @@ def eval(loader,model_info,depthscale,fscale,s2limits,dataset=None,kcam=0,f=0):
                 s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/fscale
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         s1_fcs = s1_fcs.float().to(model_info['device_comp'])
-
         output_step1,output_step2 = forward_pass(X, model_info,stacknum=stacknum, additional_input=X2_fcs,foc_dist=s1_fcs)
 
         #output_step1=output_step1*(0.1-2.9e-3)*7
@@ -287,7 +286,11 @@ def eval(loader,model_info,depthscale,fscale,s2limits,dataset=None,kcam=0,f=0):
         mse1=torch.sum(torch.square(s2est-gt_step2)*mask).item()/torch.sum(mask).item()
         #mse_val, ssim_val, psnr_val=util_func.compute_all_metrics(output_step2*mask,gt_step2*mask)
         means2mse1+=mse1
-        mse2=torch.sum(torch.square(output_step2*depthscale-gt_step2)*mask).item()/torch.sum(mask).item()
+        if(alt_gt is None):
+            mse2=torch.sum(torch.square(output_step2*depthscale-gt_step2)*mask).item()/torch.sum(mask).item()
+        else:
+            mse2=torch.sum(torch.square(output_step2*depthscale-alt_gt)*mask).item()/torch.sum(mask).item()
+
         means2mse2+=mse2
     
         blur=torch.mean(output_step1).item()
