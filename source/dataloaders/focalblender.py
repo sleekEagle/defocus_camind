@@ -13,6 +13,47 @@ from PIL import Image
 from skimage import img_as_float
 import matplotlib.pyplot as plt
 
+# to calculate circle of confusion to train defocusNet
+def _abs_val(x):
+    if isinstance(x, np.ndarray) or isinstance(x, float) or isinstance(x, int):
+        return np.abs(x)
+    else:
+        return x.abs()
+
+class CameraLens:
+    def __init__(self, focal_length, sensor_size_full=(0, 0), resolution=(1, 1), aperture_diameter=None, f_number=None, depth_scale=1):
+        self.focal_length = focal_length
+        self.depth_scale = depth_scale
+        self.sensor_size_full = sensor_size_full
+
+        if aperture_diameter is not None:
+            self.aperture_diameter = aperture_diameter
+            self.f_number = (focal_length / aperture_diameter) if aperture_diameter != 0 else 0
+        else:
+            self.f_number = f_number
+            self.aperture_diameter = focal_length / f_number
+
+        if self.sensor_size_full is not None:
+            self.resolution = resolution
+            self.aspect_ratio = resolution[0] / resolution[1]
+            self.sensor_size = [self.sensor_size_full[0], self.sensor_size_full[0] / self.aspect_ratio]
+        else:
+            self.resolution = None
+            self.aspect_ratio = None
+            self.sensor_size = None
+            self.fov = None
+            self.focal_length_pixel = None
+
+    def _get_indep_fac(self, focus_distance):
+        return (self.aperture_diameter * self.focal_length) / (focus_distance - self.focal_length)
+
+    def get_coc(self, focus_distance, depth):
+        if isinstance(focus_distance, torch.Tensor):
+            for _ in range(len(depth.shape) - len(focus_distance.shape)):
+                focus_distance = focus_distance.unsqueeze(-1)
+
+        return (_abs_val(depth - focus_distance) / depth) * self._get_indep_fac(focus_distance)
+
 # reading depth files
 def read_dpt(img_dpt_path):
     dpt_img = OpenEXR.InputFile(img_dpt_path)
@@ -29,7 +70,7 @@ output |s2-s1|/s2
 '''
 def get_blur(s1,s2,f):
     blur=abs(s2-s1)/s2 * 1/(s1-f*1e-3)
-    return blur/10.
+    return blur
 
 '''
 All in-focus image is attached to the input matrix after the RGB image
@@ -66,7 +107,7 @@ class ImageDataset(torch.utils.data.Dataset):
     """Focal place dataset."""
 
     def __init__(self, root_dir, transform_fnc=None,blur=1,aif=0,fstack=0,focus_dist=[0.1,.15,.3,0.7,1.5,100000],
-                req_f_indx=[0,2], max_dpt = 3.):
+                req_f_indx=[0,2], max_dpt = 3.,camind=True,def_f_number=0,def_f=0,blurclip=10.):
 
         self.root_dir = root_dir
         print("image data root dir : " +str(self.root_dir))
@@ -79,6 +120,9 @@ class ImageDataset(torch.utils.data.Dataset):
 
         self.focus_dist = focus_dist
         self.req_f_idx=req_f_indx
+        self.camind=camind
+        self.blurclip=blurclip
+        self.camera = CameraLens(def_f, f_number=def_f_number)
 
         ##### Load and sort all images
         self.imglist_all = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "All.tif"]
@@ -135,8 +179,12 @@ class ImageDataset(torch.utils.data.Dataset):
             mat_all = img_all.copy() / 255.
             mat_all=np.expand_dims(mat_all,axis=-1)
             mats_input = np.concatenate((mats_input, mat_all), axis=3)
-
-            img_msk = get_blur(self.focus_dist[req], img_dpt,f)
+            if(self.camind):
+                img_msk = get_blur(self.focus_dist[req], img_dpt,f)
+                img_msk = np.clip(img_msk, 0, self.blurclip) / self.blurclip
+            else:
+                img_msk=self.camera.get_coc(self.focus_dist[req], img_dpt)
+                img_msk = np.clip(img_msk, 0, 1.0e-4) / 1.0e-4
             #img_msk = np.clip(img_msk, 0, 1.0e-4) / 1.0e-4
             mat_msk = img_msk.copy()[:, :, np.newaxis]
 
@@ -166,9 +214,10 @@ class ToTensor(object):
 
 
 def load_data(data_dir, blur,aif,train_split,fstack,
-              WORKERS_NUM, BATCH_SIZE, FOCUS_DIST, REQ_F_IDX, MAX_DPT):
+              WORKERS_NUM, BATCH_SIZE, FOCUS_DIST, REQ_F_IDX, MAX_DPT,camind=True,def_f_number=0,def_f=0,blurclip=10.0):
     img_dataset = ImageDataset(root_dir=data_dir,blur=blur,aif=aif,transform_fnc=transforms.Compose([ToTensor()]),
-                               focus_dist=FOCUS_DIST,fstack=fstack,req_f_indx=REQ_F_IDX, max_dpt=MAX_DPT)
+                               focus_dist=FOCUS_DIST,fstack=fstack,req_f_indx=REQ_F_IDX, max_dpt=MAX_DPT,
+                               camind=camind,def_f_number=def_f_number,def_f=def_f,blurclip=blurclip)
 
     indices = list(range(len(img_dataset)))
     split = int(len(img_dataset) * train_split)

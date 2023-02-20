@@ -82,7 +82,7 @@ def set_comp_device(FLAG_GPU):
 
 def set_output_folders(OUTPUT_PARAMS, TRAIN_PARAMS):
     model_name = 'a' + str(TRAIN_PARAMS['ARCH_NUM']).zfill(2) + '_exp' + str(
-        OUTPUT_PARAMS['EXP_NUM']).zfill(2)
+        OUTPUT_PARAMS['EXP_NAME']).zfill(2)
     models_dir = OUTPUT_PARAMS['MODEL_PATH'] + model_name + '/'
     if not isdir(models_dir):
         mkdir(models_dir)
@@ -221,14 +221,15 @@ def save_config(r, postfix="single"):
 
 
 
-def forward_pass(X, model_info,stacknum=1,flag_step2=True,additional_input=0,foc_dist=0):
-    outputs = model_info['model'](X, model_info['inp_ch_num'], stacknum, flag_step2=flag_step2, x2 = additional_input,foc_dist=foc_dist)
+def forward_pass(X, model_info,stacknum=1,camind=True,flag_step2=True,camparam=0,foc_dist=0):
+    outputs = model_info['model'](X,model_info['inp_ch_num'],stacknum,camind=camind,flag_step2=flag_step2,
+    camparam=camparam,foc_dist=foc_dist)
     if flag_step2:
         return (outputs[1], outputs[0])
     else:
         return outputs
 
-def eval(loader,model_info,depthscale,fscale,s2limits,dataset=None,kcam=0,f=0,alt_gt=None):
+def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,kcam=0,f=0,alt_gt=None):
     means2mse1,means2mse2,meanblurmse,meanblur=0,0,0,0
     print('Total samples = '+str(len(loader)))
     for st_iter, sample_batch in enumerate(loader):
@@ -272,7 +273,7 @@ def eval(loader,model_info,depthscale,fscale,s2limits,dataset=None,kcam=0,f=0,al
                 s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/fscale
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         s1_fcs = s1_fcs.float().to(model_info['device_comp'])
-        output_step1,output_step2 = forward_pass(X, model_info,stacknum=stacknum, additional_input=X2_fcs,foc_dist=s1_fcs)
+        output_step1,output_step2 = forward_pass(X,model_info,stacknum=stacknum,camind=camind,camparam=X2_fcs,foc_dist=s1_fcs)
 
         #output_step1=output_step1*(0.1-2.9e-3)*7
         blurpred=output_step1
@@ -286,11 +287,7 @@ def eval(loader,model_info,depthscale,fscale,s2limits,dataset=None,kcam=0,f=0,al
         mse1=torch.sum(torch.square(s2est-gt_step2)*mask).item()/torch.sum(mask).item()
         #mse_val, ssim_val, psnr_val=util_func.compute_all_metrics(output_step2*mask,gt_step2*mask)
         means2mse1+=mse1
-        if(alt_gt is None):
-            mse2=torch.sum(torch.square(output_step2*depthscale-gt_step2)*mask).item()/torch.sum(mask).item()
-        else:
-            mse2=torch.sum(torch.square(output_step2*depthscale-alt_gt)*mask).item()/torch.sum(mask).item()
-
+        mse2=torch.sum(torch.square(output_step2*depthscale-gt_step2)*mask).item()/torch.sum(mask).item()
         means2mse2+=mse2
     
         blur=torch.mean(output_step1).item()

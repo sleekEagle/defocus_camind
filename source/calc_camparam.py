@@ -31,9 +31,9 @@ TRAIN_PARAMS = {
 parser = argparse.ArgumentParser(description='defocu_camind')
 parser.add_argument('--dfvmodel', default='C://Users//lahir//code//defocus//models//DFV//best.tar', help='DFV model path')
 parser.add_argument('--camindmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='DFV model path')
-parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\', help='blender data path')
+parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1-3\\', help='blender data path')
 parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
-parser.add_argument('--dataset', default='blender', help='DFV model path')
+parser.add_argument('--dataset', default='ddff', help='DFV model path')
 parser.add_argument('--s2limits', nargs='+', default=[0,1.0],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
@@ -83,7 +83,7 @@ if(args.dataset=='blender'):
     TrainImgLoader,ValImgLoader=loaders[0],loaders[1]
 if(args.dataset=='ddff'):
     DDFF12_train = DDFF12.DDFF12Loader(args.ddffpth, stack_key="stack_train", disp_key="disp_train", n_stack=10,
-                                    min_disp=0.02, max_disp=0.28,fstack=0,idx_req=[7,8,9])
+                                    min_disp=0.02, max_disp=0.28,fstack=1,idx_req=[7,8,9])
     DDFF12_val = DDFF12.DDFF12Loader(args.ddffpth, stack_key="stack_val", disp_key="disp_val", n_stack=10,
                                         min_disp=0.02, max_disp=0.28, b_test=False,fstack=0,idx_req=[6,5,4,3,2,1,0])
     DDFF12_train, DDFF12_val = [DDFF12_train], [DDFF12_val]
@@ -102,7 +102,7 @@ def est_f(f=3e-3):
     count=0
     for st_iter, sample_batch in enumerate(TrainImgLoader):
         print(st_iter)
-        if(st_iter>10):
+        if(st_iter>100):
             break
         if(args.dataset=='ddff'):
             img_stack, gt_disp, foc_dist=sample_batch

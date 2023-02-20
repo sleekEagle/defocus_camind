@@ -27,7 +27,7 @@ TRAIN_PARAMS = {
     'FILTER_NUM': 16,
     'LEARNING_RATE': 0.0001,
     'FLAG_GPU': True,
-    'EPOCHS_NUM': 500, 'EPOCH_START': 0,
+    'EPOCHS_NUM': 100, 'EPOCH_START': 0,
     'RANDOM_LEN_INPUT': 0,
     'TRAINING_MODE':2, #1: do not use step 1 , 2: use step 2
 
@@ -45,21 +45,29 @@ TRAIN_PARAMS = {
     'MODEL2_TRAIN_STEP': True,
 }
 
-OUTPUT_PARAMS = {
-    'RESULT_PATH': 'C:\\Users\\lahir\\code\\defocus\\results\\',
-    'MODEL_PATH': 'C:\\Users\\lahir\\code\\defocus\\models\\',
-    'EXP_NUM': 1,
-}
-
 parser = argparse.ArgumentParser(description='camIndDefocus')
 parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\', help='blender data path')
 parser.add_argument('--bs', type=int,default=20, help='training batch size')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
+parser.add_argument('--blurclip', default=50.0,help='Clip blur by this value : only applicable for camind model. Default=10')
 #parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='path to the saved model')
 parser.add_argument('--savedmodel', default=None, help='path to the saved model')
-parser.add_argument('--s2limits', nargs='+', default=[0.1,3.0],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--s2limits', nargs='+', default=[0.02,3.],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--dataset', default='blender', help='blender data path')
+parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defpcusnet model')
 args = parser.parse_args()
+
+if(args.camind):
+    expname='camind_d'+str(args.depthscale)+'_f'+str(args.fscale)+'_blurclip'+str(args.blurclip)
+else:
+    expname='defocus_d'+str(args.depthscale)+'_f'+str(args.fscale)
+
+OUTPUT_PARAMS = {
+    'RESULT_PATH': 'C:\\Users\\lahir\\code\\defocus\\results\\',
+    'MODEL_PATH': 'C:\\Users\\lahir\\code\\defocus\\models\\',
+    'EXP_NAME':expname,
+}
 
 # ============ init ===============
 torch.manual_seed(2023)
@@ -88,10 +96,7 @@ def train_model(loaders, model_info):
             #depth in m
             gt_step2 = Y[:, -1:, :, :]
             
-            if(True):
-                mask=(gt_step2>0.1).int()*(gt_step2<3.0).int()
-            else:
-                mask=torch.ones_like(gt_step2)
+            mask=(gt_step2>args.s2limits[0]).int()*(gt_step2<args.s2limits[1]).int()
 
             # we only use focal stacks with a single image
             stacknum = 1
@@ -117,7 +122,7 @@ def train_model(loaders, model_info):
             s1_fcs = s1_fcs.float().to(model_info['device_comp'])
             #print('fdist:'+str(sample_batch['fdist']))
             # Forward and compute loss
-            output_step1,output_step2 = util_func.forward_pass(X, model_info,stacknum=stacknum,additional_input=X2_fcs,foc_dist=s1_fcs)
+            output_step1,output_step2 = util_func.forward_pass(X, model_info,stacknum=stacknum,camind=args.camind,camparam=X2_fcs,foc_dist=s1_fcs)
             #print('mean blur pred:'+str(torch.mean(output_step1))+' min:'+str(torch.min(output_step1))+' max:'+str(torch.max(output_step1)))
             #print('mean gt blur:'+str(torch.mean(gt_step1))+' min:'+str(torch.min(gt_step1))+' max:'+str(torch.max(gt_step1)))
             #print('mean gt depth:'+str(torch.mean(gt_step2))+' min:'+str(torch.min(gt_step2))+' max:'+str(torch.max(gt_step2)))
@@ -154,8 +159,9 @@ def train_model(loaders, model_info):
         # Save model
         if (epoch_iter+1) % 10 == 0:
             print('saving model')
-            #torch.save(model_info['model'].state_dict(), model_info['model_dir'] + model_info['model_name'] + '_ep' + str(0) + '.pth')
-            s2loss1,s2loss2,blurloss,meanblur=util_func.eval(loaders[1],model_info,args.depthscale,args.fscale,args.s2limits)
+            torch.save(model_info['model'].state_dict(), model_info['model_dir'] + model_info['model_name'] + '_ep' + str(0) + '.pth')
+            s2loss1,s2loss2,blurloss,meanblur=util_func.eval(loaders[1],model_info,dataset=args.dataset,camind=args.camind,
+            depthscale=args.depthscale,fscale=args.fscale,s2limits=args.s2limits)
             print('s2 loss2: '+str(s2loss2))
             print('blur loss = '+str(blurloss))
             print('mean blur = '+str(meanblur))
@@ -167,7 +173,8 @@ def main():
 
     # Training initializations
     loaders, total_steps = focalblender.load_data(args.blenderpth,blur=1,aif=0,train_split=0.8,fstack=0,WORKERS_NUM=0,
-    BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0)
+    BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,
+    camind=args.camind,def_f_number=1,def_f=2.9e-3,blurclip=args.blurclip)
 
     model, inp_ch_num, out_ch_num = util_func.load_model(TRAIN_PARAMS)
     model = model.to(device=device_comp)
