@@ -30,7 +30,7 @@ TRAIN_PARAMS = {
 
 parser = argparse.ArgumentParser(description='defocu_camind')
 parser.add_argument('--dfvmodel', default='C://Users//lahir//code//defocus//models//DFV//best.tar', help='DFV model path')
-parser.add_argument('--camindmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='DFV model path')
+parser.add_argument('--camindmodel', default='C:\\Users\\lahir\\code\\defocus\\models1\\a03_expcamind_d_alldata1.9_f1.9_blurclip8.0\\a03_expcamind_d_alldata1.9_f1.9_blurclip8.0_ep0.pth', help='DFV model path')
 parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1-3\\', help='blender data path')
 parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
 parser.add_argument('--dataset', default='ddff', help='DFV model path')
@@ -147,12 +147,12 @@ def est_f(f=3e-3):
                 s1[i,t, :, :] = s1[i,t, :, :]*(focus_distance)
                 s1f[i,t, :, :] = s1f[i,t, :, :]*(focus_distance-f)
                 img=torch.unsqueeze(X[i,t,:,:,:],dim=0)
-                blur_pred = util_func.forward_pass(img, model_info,stacknum=1,flag_step2=False)
+                blur_pred,mul = util_func.forward_pass(img, model_info,stacknum=1,flag_step2=False)
                 blur_preds[i,t,:,:]=blur_pred
 
                 s1f_=s1f[i,t, :, :].unsqueeze(dim=0).unsqueeze(dim=1)
                 s1_=s1[i,t, :, :].unsqueeze(dim=0).unsqueeze(dim=1)
-                est_kcam=torch.abs(gt_step2.cpu()-s1_)/(gt_step2.cpu())*1/(s1f_)*1.4398/(10*blur_pred.cpu())*mask.cpu()
+                est_kcam=torch.abs(gt_step2.cpu()-s1_)/(gt_step2.cpu())*1/(s1f_)/(8*blur_pred.cpu())*mask.cpu()
                 est_kcam=est_kcam[est_kcam>0]
                 est_kcamlist=torch.cat((est_kcamlist,torch.mean(est_kcam).detach().cpu().unsqueeze(dim=0)))
                 if(args.dataset=='blender'):

@@ -53,6 +53,7 @@ class AENet(nn.Module):
 
         self.conv_out = nn.Sequential(
             nn.Conv2d(self.num_filter, self.out_dim, kernel_size=3, stride=1, padding=1),
+            nn.LeakyReLU(0.1)
         )
 
         if flag_step2:
@@ -231,6 +232,6 @@ class AENet(nn.Module):
             out_step2 = self.conv_out2(end2)
         
         if flag_step2:
-            return out_step2, out
+            return out_step2, out,mul
         else:
-            return out
+            return out,mul

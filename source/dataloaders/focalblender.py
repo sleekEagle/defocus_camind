@@ -13,6 +13,15 @@ from PIL import Image
 from skimage import img_as_float
 import matplotlib.pyplot as plt
 
+#read kcams.txt file
+def read_kcamfile(file):
+    d = {}
+    with open(file) as f:
+        for line in f:
+            (key, val) = line.split()
+            d[int(key)] = float(val)
+    return d
+
 # to calculate circle of confusion to train defocusNet
 def _abs_val(x):
     if isinstance(x, np.ndarray) or isinstance(x, float) or isinstance(x, int):
@@ -55,7 +64,7 @@ class CameraLens:
         return (_abs_val(depth - focus_distance) / depth) * self._get_indep_fac(focus_distance)
 
 # reading depth files
-def read_dpt(img_dpt_path):
+def read_dpt(img_dpt_path): 
     dpt_img = OpenEXR.InputFile(img_dpt_path)
     dw = dpt_img.header()['dataWindow']
     size = (dw.max.x - dw.min.x + 1, dw.max.y - dw.min.y + 1)
@@ -68,8 +77,8 @@ def read_dpt(img_dpt_path):
 '''
 output |s2-s1|/s2
 '''
-def get_blur(s1,s2,f):
-    blur=abs(s2-s1)/s2 * 1/(s1-f*1e-3)
+def get_blur(s1,s2,f,kcam):
+    blur=abs(s2-s1)/s2 * 1/(s1-f*1e-3)*1/kcam
     return blur
 
 '''
@@ -107,7 +116,7 @@ class ImageDataset(torch.utils.data.Dataset):
     """Focal place dataset."""
 
     def __init__(self, root_dir, transform_fnc=None,blur=1,aif=0,fstack=0,focus_dist=[0.1,.15,.3,0.7,1.5,100000],
-                req_f_indx=[0,2], max_dpt = 3.,camind=True,def_f_number=0,def_f=0,blurclip=10.):
+                req_f_indx=[0,2], max_dpt = 3.,camind=True,def_f_number=0,def_f=0,blurclip=10.,kcampath=None):
 
         self.root_dir = root_dir
         print("image data root dir : " +str(self.root_dir))
@@ -122,7 +131,11 @@ class ImageDataset(torch.utils.data.Dataset):
         self.req_f_idx=req_f_indx
         self.camind=camind
         self.blurclip=blurclip
-        self.camera = CameraLens(def_f, f_number=def_f_number)
+        self.kcampath=kcampath
+        if(kcampath):
+            self.kcamdict=read_kcamfile(kcampath)
+        if(not self.camind):
+            self.camera = CameraLens(def_f, f_number=def_f_number)
 
         ##### Load and sort all images
         self.imglist_all = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "All.tif"]
@@ -160,7 +173,12 @@ class ImageDataset(torch.utils.data.Dataset):
         mat_dpt = mat_dpt_scaled.copy()[:, :, np.newaxis]
 
         #extract N from the file name
-        kcam=float(self.imglist_dpt[idx_dpt].split('_')[1])
+        kcam_val=float(self.imglist_dpt[idx_dpt].split('_')[1])
+        if(not self.kcampath):
+            kcam=kcam_val
+        else:
+            kcam=self.kcamdict[kcam_val]
+            
         f=float(self.imglist_dpt[idx_dpt].split('_')[2])
        
         ind = idx * self.img_num
@@ -180,8 +198,8 @@ class ImageDataset(torch.utils.data.Dataset):
             mat_all=np.expand_dims(mat_all,axis=-1)
             mats_input = np.concatenate((mats_input, mat_all), axis=3)
             if(self.camind):
-                img_msk = get_blur(self.focus_dist[req], img_dpt,f)
-                img_msk = np.clip(img_msk, 0, self.blurclip) / self.blurclip
+                img_msk = get_blur(self.focus_dist[req], img_dpt,f,kcam)
+                img_msk = img_msk / self.blurclip
             else:
                 img_msk=self.camera.get_coc(self.focus_dist[req], img_dpt)
                 img_msk = np.clip(img_msk, 0, 1.0e-4) / 1.0e-4
@@ -214,10 +232,10 @@ class ToTensor(object):
 
 
 def load_data(data_dir, blur,aif,train_split,fstack,
-              WORKERS_NUM, BATCH_SIZE, FOCUS_DIST, REQ_F_IDX, MAX_DPT,camind=True,def_f_number=0,def_f=0,blurclip=10.0):
+              WORKERS_NUM, BATCH_SIZE, FOCUS_DIST, REQ_F_IDX, MAX_DPT,camind=True,def_f_number=0,def_f=0,blurclip=10.0,kcampath=None):
     img_dataset = ImageDataset(root_dir=data_dir,blur=blur,aif=aif,transform_fnc=transforms.Compose([ToTensor()]),
                                focus_dist=FOCUS_DIST,fstack=fstack,req_f_indx=REQ_F_IDX, max_dpt=MAX_DPT,
-                               camind=camind,def_f_number=def_f_number,def_f=def_f,blurclip=blurclip)
+                               camind=camind,def_f_number=def_f_number,def_f=def_f,blurclip=blurclip,kcampath=kcampath)
 
     indices = list(range(len(img_dataset)))
     split = int(len(img_dataset) * train_split)
@@ -240,9 +258,10 @@ def load_data(data_dir, blur,aif,train_split,fstack,
 
 
 datapath='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\'
-def get_data_stats(datapath):
+blurclip=1
+def get_data_stats(datapath,blurclip):
     loaders, total_steps = load_data(datapath,blur=1,aif=0,train_split=0.8,fstack=0,WORKERS_NUM=0,
-        BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0)
+        BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=blurclip)
     print('stats of train data')
     get_loader_stats(loaders[0])
     print('______')
@@ -251,6 +270,7 @@ def get_data_stats(datapath):
 def get_loader_stats(loader):
     xmin,xmax,xmean,count=100,0,0,0
     depthmin,depthmax,depthmean=100,0,0
+    blurmin,blurmax,blurmean=100,0,0
     for st_iter, sample_batch in enumerate(loader):
         # Setting up input and output data
         X = sample_batch['input'][:,0,:,:,:].float()
@@ -278,6 +298,13 @@ def get_loader_stats(loader):
             depthmax=depthmax_
         depthmean+=torch.mean(gt_step2).cpu().item()
 
+        blurmin_=torch.min(gt_step1).cpu().item()
+        if(blurmin_<blurmin):
+            blurmin=blurmin_
+        blurmax_=torch.max(gt_step1).cpu().item()
+        if(blurmax_>blurmax):
+            blurmax=blurmax_
+        blurmean+=torch.mean(gt_step1).cpu().item()
 
     print('X min='+str(xmin))
     print('X max='+str(xmax))
@@ -286,3 +313,7 @@ def get_loader_stats(loader):
     print('depth min='+str(depthmin))
     print('depth max='+str(depthmax))
     print('depth mean='+str(depthmean/count))
+
+    print('blur min='+str(blurmin))
+    print('blur max='+str(blurmax))
+    print('blur mean='+str(blurmean/count))

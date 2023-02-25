@@ -225,14 +225,18 @@ def forward_pass(X, model_info,stacknum=1,camind=True,flag_step2=True,camparam=0
     outputs = model_info['model'](X,model_info['inp_ch_num'],stacknum,camind=camind,flag_step2=flag_step2,
     camparam=camparam,foc_dist=foc_dist)
     if flag_step2:
-        return (outputs[1], outputs[0])
+        return (outputs[1], outputs[0],outputs[2])
     else:
         return outputs
 
-def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,kcam=0,f=0,alt_gt=None):
+def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,kcam=0,f=0):
     means2mse1,means2mse2,meanblurmse,meanblur=0,0,0,0
+    minblur,maxblur,gt_meanblur=100,0,0
+    gt_blur,pred_blur=torch.empty(0),torch.empty(0)
     print('Total samples = '+str(len(loader)))
     for st_iter, sample_batch in enumerate(loader):
+        #if(st_iter>100):
+        #    break
         #sys.stdout.write(str(st_iter)+" of "+str(len(loader))+" is done")
         sys.stdout.write("\r%d is done"%st_iter)
         sys.stdout.flush()
@@ -266,14 +270,26 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
             for i in range(X.shape[0]):
                 if(dataset=='blender'):
                     focus_distance=sample_batch['fdist'][i].item()
-                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/fscale*sample_batch['kcam'][i].item()/1.4398
+                    #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/fscale*sample_batch['kcam'][i].item()/1.4398
+                    #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]/sample_batch['kcam'][i].item()*1.4398*(focus_distance-sample_batch['f'][i].item())/fscale
+                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*sample_batch['kcam'][i].item()
                 elif(dataset=='ddff'):
                     focus_distance=foc_dist[i].item()
-                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-f)/fscale*kcam/1.4398
+                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*kcam
                 s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/fscale
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         s1_fcs = s1_fcs.float().to(model_info['device_comp'])
-        output_step1,output_step2 = forward_pass(X,model_info,stacknum=stacknum,camind=camind,camparam=X2_fcs,foc_dist=s1_fcs)
+        output_step1,output_step2,_ = forward_pass(X,model_info,stacknum=stacknum,camind=camind,camparam=X2_fcs,foc_dist=s1_fcs)
+
+        #gt_blur=torch.cat((gt_blur,torch.flatten(gt_step1.detach().cpu())))
+        #pred_blur=torch.cat((pred_blur,torch.flatten(output_step1.detach().cpu())))
+
+        minblur_=torch.min(output_step1).item()
+        if(minblur_<minblur):   
+            minblur=minblur_
+        maxblur_=torch.max(output_step1).item()
+        if(maxblur_>maxblur):
+            maxblur=maxblur_
 
         #output_step1=output_step1*(0.1-2.9e-3)*7
         blurpred=output_step1
@@ -290,12 +306,16 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
         mse2=torch.sum(torch.square(output_step2*depthscale-gt_step2)*mask).item()/torch.sum(mask).item()
         means2mse2+=mse2
     
-        blur=torch.mean(output_step1).item()
+        blur=torch.sum(output_step1*mask).item()/torch.sum(mask).item()
         meanblur+=blur
+        if(dataset=='blender'):
+            gtblur=torch.sum(gt_step1*mask).item()/torch.sum(mask).item()
+            gt_meanblur+=gtblur
         
-    return means2mse1/len(loader),means2mse2/len(loader),meanblurmse/len(loader),meanblur/len(loader)
+    return means2mse1/len(loader),means2mse2/len(loader),meanblurmse/len(loader),meanblur/len(loader),gt_meanblur/len(loader),minblur,maxblur
 
-def kcamwise_blur(loader,model_info,depthscale,fscale,s2limits):
+def kcamwise_blur(loader,model_info,depthscale,fscale,s2limits,camind):
+    print('iscamind:'+str(camind))
     means2mse1,means2mse2,meanblurmse,meanblur,meanblur_corrected=0,0,0,0,0
     kcams_all,meanblur_all,meanblur_corrected_all,mse_all=torch.empty(0),torch.empty(0),torch.empty(0),torch.empty(0)
     for st_iter, sample_batch in enumerate(loader):
@@ -322,15 +342,18 @@ def kcamwise_blur(loader,model_info,depthscale,fscale,s2limits):
             #iterate through the batch
             for i in range(X.shape[0]):
                 focus_distance=sample_batch['fdist'][i].item()
-                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/fscale*sample_batch['kcam'][i].item()/1.4398
+                #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/fscale*(sample_batch['kcam'][i].item())/1.4398 * 0.9**(sample_batch['kcam'][i].item())
+                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*sample_batch['kcam'][i].item()
+                #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/fscale*1
+                #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*sample_batch['kcam'][i].item()/1.4398*(0.9**(sample_batch['kcam'][i].item()))
                 s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/fscale
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         s1_fcs = s1_fcs.float().to(model_info['device_comp'])
 
-        output_step1,output_step2 = forward_pass(X, model_info,stacknum=stacknum, additional_input=X2_fcs,foc_dist=s1_fcs)
+        output_step1,output_step2,mul = forward_pass(X, model_info,stacknum=stacknum,camind=camind,camparam=X2_fcs,foc_dist=s1_fcs)
 
         meanblur=torch.mean(output_step1*mask,dim=2).mean(dim=2)[:,0].detach().cpu()
-        meanblur_corrected=torch.mean(output_step1*X2_fcs*fscale*mask,dim=2).mean(dim=2)[:,0].detach().cpu()
+        meanblur_corrected=torch.mean(mul*mask,dim=2).mean(dim=2)[:,0].detach().cpu()
         meanblur_corrected_all=torch.cat((meanblur_corrected_all,meanblur_corrected))
 
         meanblur_all=torch.cat((meanblur_all,meanblur))
@@ -358,23 +381,25 @@ def kcamwise_blur(loader,model_info,depthscale,fscale,s2limits):
     print(blurres)
     print(mseres)
 
+    theoratical_blur=torch.tensor([blurres[0].item()]).repeat_interleave(repeats=blurres.shape[0])*unique_kcams[0].item()
+    theoratical_blur=theoratical_blur/unique_kcams
+
     #plot
     unique_kcams=unique_kcams.numpy()
     mseres=mseres.numpy()
     blurres=blurres.numpy()
     blurres_corrected=blurres_corrected.numpy()
 
-    plt.scatter(unique_kcams,blurres)
-    plt.scatter(unique_kcams,blurres_corrected)
+    line1=plt.scatter(unique_kcams,blurres)
+    line2=plt.scatter(unique_kcams,blurres_corrected)
+    line3=plt.scatter(unique_kcams,theoratical_blur)
+    line1.set_label('Blur')
+    line2.set_label('Corrected Blur')
+    line3.set_label('Theoratically expected blur')
     plt.title('Blur vs Kcam')
     plt.xlabel('Kcam')
     plt.ylabel('Blur')
-    plt.show()
-
-    plt.scatter(unique_kcams,blurres_corrected)
-    plt.title('corrected Blur vs Kcam')
-    plt.xlabel('Kcam')
-    plt.ylabel('Corrected Blur')
+    plt.legend()
     plt.show()
 
     plt.scatter(unique_kcams,mseres)

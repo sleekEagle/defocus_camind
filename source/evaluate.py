@@ -37,27 +37,28 @@ OUTPUT_PARAMS = {
 }
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
-parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1-3\\', help='blender data path')
+parser.add_argument('--blenderpth', default="C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1-10_test_remapped\\", help='blender data path')
+parser.add_argument('--kcamfile', default="kcams.txt", help='blender data path')
 parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
-parser.add_argument('--dataset', default='ddff', help='blender data path')
+parser.add_argument('--dataset', default='blender', help='blender data path')
 parser.add_argument('--bs', type=int,default=1, help='training batch size')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
-parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='path to the saved model')
-parser.add_argument('--kcamest', type=int,default=1,help='use the estimated kcam parameters')
-parser.add_argument('--s2limits', nargs='+', default=[0.02,3.0],  help='the interval of depth where the errors are calculated')
-parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defpcusnet model')
+#parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models1\\a03_expdefocus_d1.9_f1.9\\a03_expdefocus_d1.9_f1.9_ep0.pth', help='path to the saved model')
+parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_d_N1_1.9_f1.9_blurclip8.0\\a03_expcamind_d_N1_1.9_f1.9_blurclip8.0_ep0.pth', help='path to the saved model')
+parser.add_argument('--s2limits', nargs='+', default=[0,1.0],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 args = parser.parse_args()
 
 def main():
     device_comp = util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
     #load the required dataset
     if(args.dataset=='blender'):
-        loaders, total_steps = focalblender.load_data(args.blenderpth,blur=1,aif=0,train_split=1.,fstack=0,WORKERS_NUM=0,
-        BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1)
+        loaders, total_steps = focalblender.load_data(args.blenderpth,blur=1,aif=0,train_split=1,fstack=0,WORKERS_NUM=0,
+        BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1,kcampath=args.blenderpth+args.kcamfile)
     elif(args.dataset=='ddff'):
         DDFF12_train = DDFF12.DDFF12Loader(args.ddffpth, stack_key="stack_train", disp_key="disp_train", n_stack=10,
-                                    min_disp=0.02, max_disp=0.28,fstack=0,idx_req=[1])
+                                    min_disp=0.02, max_disp=0.28,fstack=0,idx_req=[9])
         DDFF12_val = DDFF12.DDFF12Loader(args.ddffpth, stack_key="stack_val", disp_key="disp_val", n_stack=10,
                                             min_disp=0.02, max_disp=0.28, b_test=False,fstack=0,idx_req=[6,5,4,3,2,1,0])
         DDFF12_train, DDFF12_val = [DDFF12_train], [DDFF12_val]
@@ -91,24 +92,111 @@ def main():
                     'device_comp': device_comp,
                     'model_params': model_params,
                     }
-    if(args.dataset=='blender'):           
-        s2loss1,s2loss2,blurloss,meanblur=util_func.eval(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,
-        dataset=args.dataset)
-        util_func.kcamwise_blur(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits)
+    if(args.dataset=='blender'):  
+        print('evaluating on blender')         
+        s2loss1,s2loss2,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,
+        dataset=args.dataset,camind=args.camind)
+        util_func.kcamwise_blur(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,camind=args.camind)
     elif(args.dataset=='ddff'):
         print('DDFF dataset Evaluation')
-        for kcam_ in [46]:
-            kcam=kcam_/10
-            print(kcam)
-            s2loss1,s2loss2,blurloss,meanblur=util_func.eval(TrainImgLoader,model_info,args.depthscale,args.fscale,args.s2limits,
-            dataset=args.dataset,kcam=kcam,f=9.5e-3)
-            print('s2 loss2: '+str(s2loss2))
-            print('blur loss = '+str(blurloss))
-            print('mean blur = '+str(meanblur))  
-            print('__________________')
+        kcam=4.21
+        s2loss1,s2loss2,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(TrainImgLoader,model_info,args.depthscale,args.fscale,args.s2limits,
+        dataset=args.dataset,camind=args.camind,kcam=kcam,f=9.5e-3)
+    print('s2 loss2: '+str(s2loss2))
+    print('blur loss = '+str(blurloss))
+    print('mean blur = '+str(meanblur))  
+    print('min blur = '+str(minblur))
+    print('max blur = '+str(maxblur)) 
+    print('gt mean blur = '+str(gtmeanblur)) 
+    print('__________________')
+
+'''
+import matplotlib.pyplot as plt
+
+gt=torch.unsqueeze(gt_blur,dim=0)
+pred=torch.unsqueeze(pred_blur,dim=0)
+error=pred_blur-gt_blur
+
+
+blur_l,error_l=[],[]
+r=np.arange(0,0.6,0.001)
+for i in range(len(r)-1):
+    blur_l.append(r[i])
+    error_l.append(torch.mean(error[(gt_blur>r[i])*(gt_blur<r[i+1])]).item())
+
+plt.scatter(blur_l,error_l)
+plt.show()
+
+
+
+torch.mean(error[gt_blur<0.003])
+torch.mean(error[(gt_blur>0.003)*(gt_blur<0.03)])
+torch.mean(error[(gt_blur>0.03)*(gt_blur<0.1)])
+torch.mean(error[(gt_blur>0.03)*(gt_blur<0.1)])
+torch.mean(error[(gt_blur>0.1)*(gt_blur<0.2)])
+torch.mean(error[(gt_blur>0.2)*(gt_blur<0.3)])
+torch.mean(error[(gt_blur>0.3)*(gt_blur<0.4)])
+torch.mean(error[(gt_blur>0.4)*(gt_blur<0.6)])
+'''
+
+
+
          
      
 if __name__ == "__main__":
     main()
-    
 
+'''
+import numpy as np
+import matplotlib.pyplot as plt
+import math
+k=np.arange(1,100)
+vals=np.ones_like(k)/k
+
+corrected=vals*k
+plt.plot(vals)
+plt.plot(corrected)
+plt.show()
+
+
+
+vals=np.array([0.2727, 0.2707, 0.2496, 0.2067, 0.1554, 0.1453, 0.1331, 0.1182, 0.1150,0.0991, 0.0955, 0.0965])
+k=np.array([1.4399,  1.5839,  1.7279,  2.1598,  2.5918,  2.8798,  3.1677,  4.0317,4.3196,  7.1994, 11.5190, 14.3988])
+corrected=vals/1.4399*k*(0.9**k)
+plt.scatter(k,vals)
+plt.scatter(k,corrected)
+plt.show()
+'''
+
+
+
+'''  
+import numpy as np
+
+f=9.5e-3
+blurs=[]
+s2list,s1list=[],[]
+for s2 in np.linspace(0.02,0.28,10):
+    for s1 in np.linspace(0.02,0.28,10):
+        blur=abs(s2-s1)/s2*1/(s1-f)
+        blurs.append(blur)
+        s1list.append(s1)
+        s2list.append(s2)
+print('min: '+str(min(blurs))+' max='+str(max(blurs))) 
+print('min s2 :'+str(s2list[np.argmin(np.array(blurs))])+' max s2 :'+str(s2list[np.argmax(np.array(blurs))]))
+print('min s1 :'+str(s1list[np.argmin(np.array(blurs))])+' max s1 :'+str(s1list[np.argmax(np.array(blurs))]))
+
+
+f=2.9e-3
+blurs=[]
+s2list,s1list=[],[]
+for s2 in np.linspace(0.02,1.89,10):
+    for s1 in np.linspace(0.1,1.5,10):
+        blur=abs(s2-s1)/s2*1/(s1-f)
+        blurs.append(blur)
+        s1list.append(s1)
+        s2list.append(s2)
+print('min blur: '+str(min(blurs))+' max blur='+str(max(blurs))) 
+print('min s2 :'+str(s2list[np.argmin(np.array(blurs))])+' max s2 :'+str(s2list[np.argmax(np.array(blurs))]))
+print('min s1 :'+str(s1list[np.argmin(np.array(blurs))])+' max s1 :'+str(s1list[np.argmax(np.array(blurs))]))
+'''
