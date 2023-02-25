@@ -30,10 +30,10 @@ TRAIN_PARAMS = {
 
 parser = argparse.ArgumentParser(description='defocu_camind')
 parser.add_argument('--dfvmodel', default='C://Users//lahir//code//defocus//models//DFV//best.tar', help='DFV model path')
-parser.add_argument('--camindmodel', default='C:\\Users\\lahir\\code\\defocus\\models1\\a03_expcamind_d_alldata1.9_f1.9_blurclip8.0\\a03_expcamind_d_alldata1.9_f1.9_blurclip8.0_ep0.pth', help='DFV model path')
-parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1-3\\', help='blender data path')
+parser.add_argument('--camindmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_d_N1_1.9_f1.9_blurclip8.0\\a03_expcamind_d_N1_1.9_f1.9_blurclip8.0_ep0.pth', help='camind model path')
+parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1-10_test_remapped\\', help='blender data path')
 parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
-parser.add_argument('--dataset', default='ddff', help='DFV model path')
+parser.add_argument('--dataset', default='blender', help='DFV model path')
 parser.add_argument('--s2limits', nargs='+', default=[0,1.0],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
@@ -102,8 +102,8 @@ def est_f(f=3e-3):
     count=0
     for st_iter, sample_batch in enumerate(TrainImgLoader):
         print(st_iter)
-        if(st_iter>100):
-            break
+        #if(st_iter>100):
+        #    break
         if(args.dataset=='ddff'):
             img_stack, gt_disp, foc_dist=sample_batch
             X=img_stack.float().to(device_comp)
@@ -112,7 +112,6 @@ def est_f(f=3e-3):
         if(args.dataset=='blender'):
             X = sample_batch['input'].float().to(device_comp)
             Y = sample_batch['output'].float().to(device_comp)
-            gt_step1 = Y[:, :-1, :, :]
             gt_step2 = Y[:, -1:, :, :]
 
             #preparing data for the DFV model to predict s2

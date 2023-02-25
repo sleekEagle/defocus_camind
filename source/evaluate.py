@@ -38,7 +38,7 @@ OUTPUT_PARAMS = {
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
 parser.add_argument('--blenderpth', default="C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1-10_test_remapped\\", help='blender data path')
-parser.add_argument('--kcamfile', default="kcams.txt", help='blender data path')
+parser.add_argument('--kcamfile', default="kcams_est.txt", help='blender data path')
 parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
 parser.add_argument('--dataset', default='blender', help='blender data path')
 parser.add_argument('--bs', type=int,default=1, help='training batch size')
