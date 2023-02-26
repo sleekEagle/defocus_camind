@@ -51,17 +51,24 @@ parser.add_argument('--bs', type=int,default=20, help='training batch size')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
 parser.add_argument('--blurclip', default=8.0,help='Clip blur by this value : only applicable for camind model. Default=10')
+parser.add_argument('--blurweight', default=1.5,help='weight for blur loss')
 #parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='path to the saved model')
 parser.add_argument('--savedmodel', default=None, help='path to the saved model')
 parser.add_argument('--s2limits', nargs='+', default=[0.1,3.],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--dataset', default='blender', help='blender data path')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defpcusnet model')
+parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
 args = parser.parse_args()
 
-if(args.camind):
-    expname='camind_d_N1_LR0.1_'+str(args.depthscale)+'_f'+str(args.fscale)+'_blurclip'+str(args.blurclip)
+if(args.aif):
+    expname='aif_N1_d_'+str(args.depthscale)+'_f'+str(args.fscale)
 else:
-    expname='defocus_d_N1-11_'+str(args.depthscale)+'_f'+str(args.fscale)
+    if(args.camind):
+        expname='camind_N1_d_'+str(args.depthscale)+'_f'+str(args.fscale)+'_blurclip'+str(args.blurclip)+'_blurweight'+str(args.blurweight)
+    else:
+        expname='defocus_N1_d_'+str(args.depthscale)+'_f'+str(args.fscale)+'_blurweight'+str(args.blurweight)
+
+    
 
 OUTPUT_PARAMS = {
     'RESULT_PATH': 'C:\\Users\\lahir\\code\\defocus\\results\\',
@@ -120,7 +127,8 @@ def train_model(loaders, model_info):
                     #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()
                     #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/args.fscale
                     X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*sample_batch['kcam'][i].item()
-                    s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/args.fscale
+                    if(not args.aif):
+                        s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/args.fscale
 
             X2_fcs = X2_fcs.float().to(model_info['device_comp'])
             s1_fcs = s1_fcs.float().to(model_info['device_comp'])
@@ -134,8 +142,12 @@ def train_model(loaders, model_info):
             blur_sum+=torch.sum(output_step1*mask).item()/torch.sum(mask)
             #blurpred=output_step1*(0.1-2.9e-3)*1.4398*7
             depth_loss=criterion(output_step2*mask, gt_step2/args.depthscale*mask)
-            blur_loss=criterion(output_step1*mask, gt_step1*mask)
-            loss=depth_loss+blur_loss
+            #we don't train blur if input images are AiF
+            if(args.aif):
+                blur_loss=0 
+            else:
+                blur_loss=criterion(output_step1*mask, gt_step1*mask)
+            loss=depth_loss+blur_loss*args.blurweight
 
             absloss=torch.sum(torch.abs(output_step1-gt_step1)*mask)/torch.sum(mask)
             absloss_sum+=absloss.item()
@@ -146,7 +158,10 @@ def train_model(loaders, model_info):
             # Training log
             loss_sum += loss.item()
             iter_count += 1.
-            blurloss_sum+=blur_loss.item()
+            if(args.aif):
+                blurloss_sum+=0
+            else:
+                blurloss_sum+=blur_loss.item()
             depthloss_sum+=depth_loss.item()
 
             if (st_iter + 1) % 10 == 0:
@@ -176,7 +191,7 @@ def main():
     device_comp = util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
 
     # Training initializations
-    loaders, total_steps = focalblender.load_data(args.blenderpth,blur=1,aif=0,train_split=0.8,fstack=0,WORKERS_NUM=0,
+    loaders, total_steps = focalblender.load_data(args.blenderpth,blur=1,aif=args.aif,train_split=0.8,fstack=0,WORKERS_NUM=0,
     BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,
     camind=args.camind,def_f_number=1,def_f=2.9e-3,blurclip=args.blurclip)
 

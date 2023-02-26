@@ -33,7 +33,7 @@ parser.add_argument('--dfvmodel', default='C://Users//lahir//code//defocus//mode
 parser.add_argument('--camindmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_d_N1_1.9_f1.9_blurclip8.0\\a03_expcamind_d_N1_1.9_f1.9_blurclip8.0_ep0.pth', help='camind model path')
 parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1-10_test_remapped\\', help='blender data path')
 parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
-parser.add_argument('--dataset', default='blender', help='DFV model path')
+parser.add_argument('--dataset', default='ddff', help='DFV model path')
 parser.add_argument('--s2limits', nargs='+', default=[0,1.0],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
@@ -151,7 +151,7 @@ def est_f(f=3e-3):
 
                 s1f_=s1f[i,t, :, :].unsqueeze(dim=0).unsqueeze(dim=1)
                 s1_=s1[i,t, :, :].unsqueeze(dim=0).unsqueeze(dim=1)
-                est_kcam=torch.abs(gt_step2.cpu()-s1_)/(gt_step2.cpu())*1/(s1f_)/(8*blur_pred.cpu())*mask.cpu()
+                est_kcam=torch.abs(stacked.cpu()-s1_)/(stacked.cpu())*1/(s1f_)/(8*blur_pred.cpu())*mask.cpu()
                 est_kcam=est_kcam[est_kcam>0]
                 est_kcamlist=torch.cat((est_kcamlist,torch.mean(est_kcam).detach().cpu().unsqueeze(dim=0)))
                 if(args.dataset=='blender'):
@@ -207,6 +207,7 @@ def est_f(f=3e-3):
         plt.show()
         print('real kcams: '+str(unique_kcams.tolist()))
         print('estimated kcams: '+str(kcam_est_list.tolist()))
+        print('s2 estimation error: '+str(s2error/len(TrainImgLoader)))
 
     if(args.dataset=='ddff'):
         est_kcamlist_list=reject_outliers(est_kcamlist,m=0.1)

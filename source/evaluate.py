@@ -45,16 +45,17 @@ parser.add_argument('--bs', type=int,default=1, help='training batch size')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
 #parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models1\\a03_expdefocus_d1.9_f1.9\\a03_expdefocus_d1.9_f1.9_ep0.pth', help='path to the saved model')
-parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_d_N1_1.9_f1.9_blurclip8.0\\a03_expcamind_d_N1_1.9_f1.9_blurclip8.0_ep0.pth', help='path to the saved model')
-parser.add_argument('--s2limits', nargs='+', default=[0,1.0],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_N1_d_1.9_f1.9_blurclip8.0_blurweight0.5\\a03_expcamind_N1_d_1.9_f1.9_blurclip8.0_blurweight0.5_ep0.pth', help='path to the saved model')
+parser.add_argument('--s2limits', nargs='+', default=[0.1,1.0],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
+parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
 args = parser.parse_args()
 
 def main():
     device_comp = util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
     #load the required dataset
     if(args.dataset=='blender'):
-        loaders, total_steps = focalblender.load_data(args.blenderpth,blur=1,aif=0,train_split=1,fstack=0,WORKERS_NUM=0,
+        loaders, total_steps = focalblender.load_data(args.blenderpth,blur=1,aif=args.aif,train_split=1,fstack=0,WORKERS_NUM=0,
         BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1,kcampath=args.blenderpth+args.kcamfile)
     elif(args.dataset=='ddff'):
         DDFF12_train = DDFF12.DDFF12Loader(args.ddffpth, stack_key="stack_train", disp_key="disp_train", n_stack=10,
@@ -99,7 +100,7 @@ def main():
         util_func.kcamwise_blur(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,camind=args.camind)
     elif(args.dataset=='ddff'):
         print('DDFF dataset Evaluation')
-        kcam=4.21
+        kcam=3
         s2loss1,s2loss2,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(TrainImgLoader,model_info,args.depthscale,args.fscale,args.s2limits,
         dataset=args.dataset,camind=args.camind,kcam=kcam,f=9.5e-3)
     print('s2 loss2: '+str(s2loss2))

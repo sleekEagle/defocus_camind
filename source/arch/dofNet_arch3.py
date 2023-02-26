@@ -53,7 +53,7 @@ class AENet(nn.Module):
 
         self.conv_out = nn.Sequential(
             nn.Conv2d(self.num_filter, self.out_dim, kernel_size=3, stride=1, padding=1),
-            nn.LeakyReLU(0.1)
+            nn.LeakyReLU()
         )
 
         if flag_step2:
