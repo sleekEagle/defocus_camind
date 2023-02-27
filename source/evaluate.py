@@ -38,18 +38,21 @@ OUTPUT_PARAMS = {
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
 parser.add_argument('--blenderpth', default="C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1-10_test_remapped\\", help='blender data path')
-parser.add_argument('--kcamfile', default="kcams_est.txt", help='blender data path')
+parser.add_argument('--kcamfile', default="kcams_gt.txt", help='blender data path')
 parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
 parser.add_argument('--dataset', default='blender', help='blender data path')
 parser.add_argument('--bs', type=int,default=1, help='training batch size')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
 #parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models1\\a03_expdefocus_d1.9_f1.9\\a03_expdefocus_d1.9_f1.9_ep0.pth', help='path to the saved model')
-parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_N1_d_1.9_f1.9_blurclip8.0_blurweight0.5\\a03_expcamind_N1_d_1.9_f1.9_blurclip8.0_blurweight0.5_ep0.pth', help='path to the saved model')
+parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a04_expaif_N1_d_1.9\\a04_expaif_N1_d_1.9_ep0.pth', help='path to the saved model')
 parser.add_argument('--s2limits', nargs='+', default=[0.1,1.0],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
-parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
+parser.add_argument('--aif', type=bool,default=True, help='True: Train with the AiF images. False: Train with blurred images')
 args = parser.parse_args()
+
+if(args.aif):
+    TRAIN_PARAMS['ARCH_NUM']=4
 
 def main():
     device_comp = util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
@@ -96,8 +99,8 @@ def main():
     if(args.dataset=='blender'):  
         print('evaluating on blender')         
         s2loss1,s2loss2,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,
-        dataset=args.dataset,camind=args.camind)
-        util_func.kcamwise_blur(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,camind=args.camind)
+        dataset=args.dataset,camind=args.camind,aif=args.aif)
+        util_func.kcamwise_blur(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,camind=args.camind,aif=args.aif)
     elif(args.dataset=='ddff'):
         print('DDFF dataset Evaluation')
         kcam=3

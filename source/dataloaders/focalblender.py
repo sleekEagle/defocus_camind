@@ -178,7 +178,7 @@ class ImageDataset(torch.utils.data.Dataset):
             kcam=kcam_val
         else:
             kcam=self.kcamdict[kcam_val]
-            
+
         f=float(self.imglist_dpt[idx_dpt].split('_')[2])
        
         ind = idx * self.img_num

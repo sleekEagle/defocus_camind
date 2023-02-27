@@ -51,7 +51,7 @@ parser.add_argument('--bs', type=int,default=20, help='training batch size')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
 parser.add_argument('--blurclip', default=8.0,help='Clip blur by this value : only applicable for camind model. Default=10')
-parser.add_argument('--blurweight', default=1.5,help='weight for blur loss')
+parser.add_argument('--blurweight', default=0,help='weight for blur loss')
 #parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='path to the saved model')
 parser.add_argument('--savedmodel', default=None, help='path to the saved model')
 parser.add_argument('--s2limits', nargs='+', default=[0.1,3.],  help='the interval of depth where the errors are calculated')
@@ -61,10 +61,11 @@ parser.add_argument('--aif', type=bool,default=False, help='True: Train with the
 args = parser.parse_args()
 
 if(args.aif):
-    expname='aif_N1_d_'+str(args.depthscale)+'_f'+str(args.fscale)
+    expname='aif_N1_d_'+str(args.depthscale)
+    TRAIN_PARAMS['ARCH_NUM']=4
 else:
     if(args.camind):
-        expname='camind_N1_d_'+str(args.depthscale)+'_f'+str(args.fscale)+'_blurclip'+str(args.blurclip)+'_blurweight'+str(args.blurweight)
+        expname='camind_fdistmul_N1_d_'+str(args.depthscale)+'_f'+str(args.fscale)+'_blurclip'+str(args.blurclip)+'_blurweight'+str(args.blurweight)
     else:
         expname='defocus_N1_d_'+str(args.depthscale)+'_f'+str(args.fscale)+'_blurweight'+str(args.blurweight)
 
@@ -124,17 +125,21 @@ def train_model(loaders, model_info):
                 #iterate through the batch
                 for i in range(X.shape[0]):
                     focus_distance=sample_batch['fdist'][i].item()
+                    f=sample_batch['f'][i].item()
                     #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()
                     #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/args.fscale
-                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*sample_batch['kcam'][i].item()
                     if(not args.aif):
+                        X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*sample_batch['kcam'][i].item()*(focus_distance-f)/args.fscale
                         s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/args.fscale
 
             X2_fcs = X2_fcs.float().to(model_info['device_comp'])
             s1_fcs = s1_fcs.float().to(model_info['device_comp'])
             #print('fdist:'+str(sample_batch['fdist']))
             # Forward and compute loss
-            output_step1,output_step2,_ = util_func.forward_pass(X, model_info,stacknum=stacknum,camind=args.camind,camparam=X2_fcs,foc_dist=s1_fcs)
+            if(args.aif):
+                output_step1,output_step2= util_func.forward_pass(X, model_info,stacknum=stacknum,camind=args.camind,camparam=X2_fcs,foc_dist=s1_fcs,aif=args.aif)
+            else:
+                output_step1,output_step2,_ = util_func.forward_pass(X, model_info,stacknum=stacknum,camind=args.camind,camparam=X2_fcs,foc_dist=s1_fcs,aif=args.aif)
             #print('mean blur pred:'+str(torch.mean(output_step1))+' min:'+str(torch.min(output_step1))+' max:'+str(torch.max(output_step1)))
             #print('mean gt blur:'+str(torch.mean(gt_step1))+' min:'+str(torch.min(gt_step1))+' max:'+str(torch.max(gt_step1)))
             #print('mean gt depth:'+str(torch.mean(gt_step2))+' min:'+str(torch.min(gt_step2))+' max:'+str(torch.max(gt_step2)))
@@ -180,7 +185,7 @@ def train_model(loaders, model_info):
             print('saving model')
             torch.save(model_info['model'].state_dict(), model_info['model_dir'] + model_info['model_name'] + '_ep' + str(0) + '.pth')
             s2loss1,s2loss2,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(loaders[1],model_info,dataset=args.dataset,camind=args.camind,
-            depthscale=args.depthscale,fscale=args.fscale,s2limits=args.s2limits)
+            depthscale=args.depthscale,fscale=args.fscale,s2limits=args.s2limits,aif=args.aif)
             print('s2 loss2: '+str(s2loss2))
             print('blur loss = '+str(blurloss))
             print('mean blur = '+str(meanblur))
