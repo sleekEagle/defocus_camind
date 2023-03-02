@@ -317,3 +317,21 @@ def get_loader_stats(loader):
     print('blur min='+str(blurmin))
     print('blur max='+str(blurmax))
     print('blur mean='+str(blurmean/count))
+
+'''
+blur_thres=7.0
+p=3.1/256*1e-3 # pixel width in m
+N=2
+f=6e-3
+s2range=[0.1,2.0]
+s1range=[0.1,1.5]
+
+get_workable_s1s2ranges(p,N,f,s2range,s1range,blur_thres)
+'''
+
+
+
+
+
+
+
