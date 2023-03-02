@@ -336,9 +336,13 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
             gtblur=torch.sum(gt_step1*mask).item()/torch.sum(mask).item()
             gt_meanblur+=gtblur
     if(calc_distmse):
-        print('distance wise error: ')
-        print(distmse/distsum)
-        
+        print('\ndistance wise error (distances rounded to the shown value): ')
+        mse_=distmse/distsum
+        mse_=mse_[~torch.isnan(mse_)]
+        values=np.arange(0.1,(len(mse_)+1)*0.1,0.1)
+        for i,v in enumerate(values):
+            print("%2.1f : %4.3f"%(v,mse_[i].item()))
+
     return means2mse1/len(loader),means2mse2/len(loader),meanblurmse/len(loader),meanblur/len(loader),gt_meanblur/len(loader),minblur,maxblur
 
 def kcamwise_blur(loader,model_info,depthscale,fscale,s2limits,camind,aif):
