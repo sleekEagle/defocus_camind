@@ -30,13 +30,17 @@ TRAIN_PARAMS = {
 
 parser = argparse.ArgumentParser(description='defocu_camind')
 parser.add_argument('--dfvmodel', default='C://Users//lahir//code//defocus//models//DFV//best.tar', help='DFV model path')
-parser.add_argument('--camindmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_d_N1_1.9_f1.9_blurclip8.0\\a03_expcamind_d_N1_1.9_f1.9_blurclip8.0_ep0.pth', help='camind model path')
+parser.add_argument('--camindmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3_ep0.pth', help='camind model path')
 parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1-10_test_remapped\\', help='blender data path')
 parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
-parser.add_argument('--dataset', default='ddff', help='DFV model path')
-parser.add_argument('--s2limits', nargs='+', default=[0,1.0],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--dataset', default='blender', help='DFV model path')
+parser.add_argument('--s2limits', nargs='+', default=[0.1,0.3],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
+parser.add_argument('--blurnorm', type=int,default=8.0, help='blur normalization value used to train camind model (all blur values were divided by this value)')
+parser.add_argument('--usegt', type=bool,default=False, help='True: use GT depth values when estimation kcams False: use DFV estimated depth values instead (more realistic)')
+parser.add_argument('--maximgs', type=int,default=5, help='max number of focal stacks (per one camera) used to estimate kcams')
+parser.add_argument('--s1indices', nargs='+', default=[0,1,2,3,4], help='indices of focal distances used to estimate kcam')
 args = parser.parse_args()
 
 # construct DFV model and load weights
@@ -79,11 +83,11 @@ model_info = {'model': model,
 #dataloader
 if(args.dataset=='blender'):
     loaders, total_steps = focalblender.load_data(args.blenderpth,blur=1,aif=0,train_split=1.,fstack=1,WORKERS_NUM=0,
-        BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1)
+        BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=args.s1indices,MAX_DPT=1)
     TrainImgLoader,ValImgLoader=loaders[0],loaders[1]
 if(args.dataset=='ddff'):
     DDFF12_train = DDFF12.DDFF12Loader(args.ddffpth, stack_key="stack_train", disp_key="disp_train", n_stack=10,
-                                    min_disp=0.02, max_disp=0.28,fstack=1,idx_req=[7,8,9])
+                                    min_disp=0.02, max_disp=0.28,fstack=1,idx_req=args.s1indices)
     DDFF12_val = DDFF12.DDFF12Loader(args.ddffpth, stack_key="stack_val", disp_key="disp_val", n_stack=10,
                                         min_disp=0.02, max_disp=0.28, b_test=False,fstack=0,idx_req=[6,5,4,3,2,1,0])
     DDFF12_train, DDFF12_val = [DDFF12_train], [DDFF12_val]
@@ -93,17 +97,23 @@ if(args.dataset=='ddff'):
 
     TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=0, batch_size=1, shuffle=True, drop_last=True)
     ValImgLoader = torch.utils.data.DataLoader(dataset=dataset_val, num_workers=0, batch_size=1, shuffle=False, drop_last=True)
-f=3e-3
-
 #calculate s2 for each focal stack
-def est_f(f=3e-3):
+def est_kcam(f,maximgs=20,usegt=False):
     s2error,est_kcamlist,kcamlist=0,torch.empty(0),torch.empty(0)
     meanf=0
     count=0
     for st_iter, sample_batch in enumerate(TrainImgLoader):
-        print(st_iter)
-        #if(st_iter>100):
+        #if(st_iter>200):
         #    break
+        #break if we have the minimum requred number of images (maximgs) from each kcam
+        unique_kcams, _ = kcamlist.unique(dim=0, return_counts=True)
+        minn=100
+        for k in unique_kcams:
+            n=len(kcamlist[kcamlist==k])
+            if n<minn:
+                minn=n
+        if(st_iter>0 and minn>=maximgs):
+            break
         if(args.dataset=='ddff'):
             img_stack, gt_disp, foc_dist=sample_batch
             X=img_stack.float().to(device_comp)
@@ -137,6 +147,12 @@ def est_f(f=3e-3):
         blur_preds = torch.ones([bs, stacknum, X.shape[3], X.shape[4]])
         stacked=stacked.to("cpu")
         for i in range(bs):
+            #if we have this kam the required number of times, continue
+            if(args.dataset=='blender'):
+                kcam=sample_batch['kcam'].detach().cpu()
+                n=len(kcamlist[kcamlist==kcam])
+                if(n>=maximgs):
+                    continue
             #iterate through the focal stack
             for t in range(stacknum):
                 if(args.dataset=='ddff'):
@@ -151,13 +167,17 @@ def est_f(f=3e-3):
 
                 s1f_=s1f[i,t, :, :].unsqueeze(dim=0).unsqueeze(dim=1)
                 s1_=s1[i,t, :, :].unsqueeze(dim=0).unsqueeze(dim=1)
-                est_kcam=torch.abs(stacked.cpu()-s1_)/(stacked.cpu())*1/(s1f_)/(8*blur_pred.cpu())*mask.cpu()
+                if(usegt):
+                    est_kcam=torch.abs(gt_step2.cpu()-s1_)/(gt_step2.cpu())*1/(s1f_)/(args.blurnorm*blur_pred.cpu())*mask.cpu()
+                else:
+                    est_kcam=torch.abs(stacked.cpu()-s1_)/(stacked.cpu())*1/(s1f_)/(args.blurnorm*blur_pred.cpu())*mask.cpu()
                 est_kcam=est_kcam[est_kcam>0]
                 est_kcamlist=torch.cat((est_kcamlist,torch.mean(est_kcam).detach().cpu().unsqueeze(dim=0)))
                 if(args.dataset=='blender'):
                     kcamlist=torch.cat((kcamlist,sample_batch['kcam'].detach().cpu()))
 
         #estimating f
+        '''
         for i in range(stacknum):
             for j in range(stacknum):
                 if(i==j):
@@ -179,6 +199,7 @@ def est_f(f=3e-3):
                 meanf+=torch.mean(f_est[f_est>0]).item()
                 count+=1
     print('estimated f = '+str(meanf/count))
+    '''
 
     #estimating Kcam
     def reject_outliers(data, m = 1):
@@ -188,24 +209,25 @@ def est_f(f=3e-3):
         return data[s<m]
 
     if(args.dataset=='blender'):
-        unique_kcams, _ = kcamlist.unique(dim=0, return_counts=True)
+        unique_kcams, nums = kcamlist.unique(dim=0, return_counts=True)
         kcam_est_list=torch.empty((0))
         for i in range(unique_kcams.shape[0]):
             indices=((kcamlist == unique_kcams[i].item()).nonzero(as_tuple=True)[0])
             estkcams_i=est_kcamlist[indices]
             #remove outliers (yes, again)
-            estkcams_i_clean=reject_outliers(estkcams_i,m=0.1)
+            estkcams_i_clean=reject_outliers(estkcams_i,m=0.5)
             kcam_est=torch.mean(estkcams_i_clean).unsqueeze(dim=0)
             kcam_est_list=torch.cat((kcam_est_list,kcam_est))
 
         errors=((kcam_est_list-unique_kcams)/unique_kcams).numpy()
 
         plt.scatter(unique_kcams,abs(errors))
-        plt.title('Depth range 0.1-1.0 m')
+        plt.title('MSE of Kcam estimation')
         plt.xlabel('Kcam')
-        plt.ylabel('MSE of Kcam estimation')
+        plt.ylabel('MSE')
         plt.show()
         print('real kcams: '+str(unique_kcams.tolist()))
+        print('num images : '+str(nums))
         print('estimated kcams: '+str(kcam_est_list.tolist()))
         print('s2 estimation error: '+str(s2error/len(TrainImgLoader)))
 
@@ -214,7 +236,13 @@ def est_f(f=3e-3):
         print("Estimated Kcam = "+str(torch.mean(est_kcamlist_list).item()))
 
 def main():
-    est_f()
+    if(args.dataset=='blender'):
+        f=2.9e-3
+    if(args.dataset=='ddff'):
+        f=9.5e-3
+    #need to mutiply maximgs by len(args.s1indices) because maximgs is the number of focal stacks used
+    #but we need the number of images
+    est_kcam(f,args.maximgs*len(args.s1indices),args.usegt)
 
 if __name__ == "__main__":
     main()

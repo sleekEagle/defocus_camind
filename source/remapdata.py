@@ -3,7 +3,7 @@ from os.path import isfile, join, isdir
 import numpy as np
 
 
-path='C://Users//lahir//focalstacks//datasets//mediumN1-10_test_remapped//'
+path='C://usr//wiss//maximov//RD//DepthFocus//Datasets//focal_data_remapped//'
 depthfiles=[f for f in listdir(path) if isfile(join(path, f)) and f[-7:] == "Dpt.exr"]
 
 kcams=[float(file.split('_')[1]) for file in depthfiles]
@@ -17,12 +17,11 @@ for file in depthfiles:
     newname=splt[0]+'_'+str(arg)+'_'+('_'.join(splt[2:]))
     rename(path+file,path+newname)
 
-#read kcams.txt file
-d = {}
-with open(path+"kcams.txt") as f:
-    for line in f:
-       (key, val) = line.split()
-       d[int(key)] = float(val)
+
+#write kcam indices to file
+with open(path+"kcams_gt.txt","w+") as f:
+    for i,value in enumerate(unique_kcams):
+        f.write(str(i)+' '+str(value)+'\n')
 
 
 

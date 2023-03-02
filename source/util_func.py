@@ -280,7 +280,7 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
                 elif(dataset=='ddff'):
                     focus_distance=foc_dist[i].item()
                     if(not aif):
-                        X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*kcam
+                        X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*kcam*(focus_distance-f)/fscale
                 if(not aif):
                     s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/fscale
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
@@ -424,6 +424,46 @@ def kcamwise_blur(loader,model_info,depthscale,fscale,s2limits,camind,aif):
     plt.xlabel('Kcam')
     plt.ylabel('MSE')
     plt.show()
+
+
+'''
+get the ranges of s1 and s2 where blur is less than blur_thres
+for the given set of camera parameters
+p=pixel size in m
+N=f number (F-stop)
+f=focal length in m
+imgratio=(output image width in pixels)/(input image width in pixels)  . This is assumed to be 1 in blender dataset
+s2range=the range of interested s2values [s2min,s2max]
+s1range=the range of interested s1values
+blur_thres=maximum values of blur allowed
+blur is calculated as
+blur=abs(s2-s1)/s2*1/(s1-f)*1/kcam*
+1/kcam=f^2/N*1/p*imgratio
+'''
+
+def get_workable_s1s2ranges(p,N,f,s2range,s1range,blur_thres,imgratio=1):
+    blur=[]
+    ind=[]
+    for s2 in np.arange(s2range[0],s2range[1]+0.05,0.05):
+        for s1 in np.arange(s1range[0],s1range[1]+0.05,0.05):
+            kcam=1/(f**2/N/p)
+            b=abs(s2-s1)/s2/(s1-f)/kcam
+            blur.append(b)
+            ind.append((s1,s2))
+
+    #check which values are under the threshold
+    blur_np=np.array(blur)
+    good_ind=np.argwhere(blur_np<blur_thres)[:,0]
+    ind=np.array(ind)
+    ind=np.around(ind,decimals=2)
+    good_vals=ind[good_ind,:]
+    unique_s1=np.unique(good_vals[:,0])
+    print('Workable s1 and s2 ranges for the given camera: ')
+    for s1 in unique_s1:
+        vals=good_vals[good_vals[:,0]==s1]
+        if(len(vals)>1):
+            print('s1='+str(s1)+' min s2='+str(np.min(vals[:,1]))+' max s2='+str(np.max(vals[:,1])))
+
 
 '''
 import torch
