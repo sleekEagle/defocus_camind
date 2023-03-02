@@ -231,10 +231,14 @@ def forward_pass(X, model_info,stacknum=1,camind=True,flag_step2=True,camparam=0
     else:
         return outputs
 
-def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,kcam=0,f=0,aif=False):
+def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,kcam=0,f=0,aif=False,calc_distmse=False):
     means2mse1,means2mse2,meanblurmse,meanblur=0,0,0,0
     minblur,maxblur,gt_meanblur=100,0,0
     gt_blur,pred_blur=torch.empty(0),torch.empty(0)
+    #store distance wise mse
+    distmse=torch.zeros(100)
+    distsum=torch.zeros(100)
+
     print('Total samples = '+str(len(loader)))
     for st_iter, sample_batch in enumerate(loader):
         #if(st_iter>100):
@@ -314,12 +318,26 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
         means2mse1+=mse1
         mse2=torch.sum(torch.square(output_step2*depthscale-gt_step2)*mask).item()/torch.sum(mask).item()
         means2mse2+=mse2
-    
+
+        if(calc_distmse):
+            squareder=torch.square(output_step2*depthscale-gt_step2)*mask
+            gtround=torch.round(gt_step2*10,decimals=0)
+            for i in range(1,len(distmse)+1):
+                selected_val=squareder[gtround==i]
+                mask_sum=torch.sum(mask[gtround==i]).item()
+                if(mask_sum>0):
+                    er=(torch.sum(selected_val)/mask_sum).item()
+                    distmse[i-1]+=er
+                    distsum[i-1]+=1
+
         blur=torch.sum(output_step1*mask).item()/torch.sum(mask).item()
         meanblur+=blur
         if(dataset=='blender'):
             gtblur=torch.sum(gt_step1*mask).item()/torch.sum(mask).item()
             gt_meanblur+=gtblur
+    if(calc_distmse):
+        print('distance wise error: ')
+        print(distmse/distsum)
         
     return means2mse1/len(loader),means2mse2/len(loader),meanblurmse/len(loader),meanblur/len(loader),gt_meanblur/len(loader),minblur,maxblur
 

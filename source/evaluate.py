@@ -37,17 +37,17 @@ OUTPUT_PARAMS = {
 }
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
-parser.add_argument('--blenderpth', default="C://usr//wiss//maximov//RD//DepthFocus//Datasets//focal_data_remapped//", help='blender data path')
+parser.add_argument('--blenderpth', default="C://Users//lahir//focalstacks//datasets//mediumN1-10_test_remapped//", help='blender data path')
 parser.add_argument('--kcamfile', default="kcams_gt.txt", help='blender data path')
 parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
-parser.add_argument('--dataset', default='ddff', help='blender data path')
+parser.add_argument('--dataset', default='blender', help='blender data path')
 parser.add_argument('--bs', type=int,default=1, help='training batch size')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
-parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expdefocus_d1.9_f1.9\\a03_expdefocus_d1.9_f1.9_ep0.pth', help='path to the saved model')
-#parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3_ep0.pth', help='path to the saved model')
-parser.add_argument('--s2limits', nargs='+', default=[0.02,0.2],  help='the interval of depth where the errors are calculated')
-parser.add_argument('--camind', type=bool,default=False, help='True: use camera independent model. False: use defocusnet model')
+#parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expdefocus_d1.9_f1.9\\a03_expdefocus_d1.9_f1.9_ep0.pth', help='path to the saved model')
+parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3_ep0.pth', help='path to the saved model')
+parser.add_argument('--s2limits', nargs='+', default=[0.1,1.0],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
 args = parser.parse_args()
 
@@ -99,7 +99,7 @@ def main():
     if(args.dataset=='blender'):  
         print('evaluating on blender')         
         s2loss1,s2loss2,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,
-        dataset=args.dataset,camind=args.camind,aif=args.aif)
+        dataset=args.dataset,camind=args.camind,aif=args.aif,calc_distmse=True)
         util_func.kcamwise_blur(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,camind=args.camind,aif=args.aif)
     elif(args.dataset=='ddff'):
         print('DDFF dataset Evaluation')
