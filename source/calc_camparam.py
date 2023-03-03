@@ -33,14 +33,14 @@ parser.add_argument('--dfvmodel', default='C://Users//lahir//code//defocus//mode
 parser.add_argument('--camindmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3_ep0.pth', help='camind model path')
 parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1-10_test_remapped\\', help='blender data path')
 parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
-parser.add_argument('--dataset', default='blender', help='DFV model path')
-parser.add_argument('--s2limits', nargs='+', default=[0.1,0.3],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--dataset', default='ddff', help='DFV model path')
+parser.add_argument('--s2limits', nargs='+', default=[0.02,0.2],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
 parser.add_argument('--blurnorm', type=int,default=8.0, help='blur normalization value used to train camind model (all blur values were divided by this value)')
 parser.add_argument('--usegt', type=bool,default=False, help='True: use GT depth values when estimation kcams False: use DFV estimated depth values instead (more realistic)')
-parser.add_argument('--maximgs', type=int,default=5, help='max number of focal stacks (per one camera) used to estimate kcams')
-parser.add_argument('--s1indices', nargs='+', default=[0,1,2,3,4], help='indices of focal distances used to estimate kcam')
+parser.add_argument('--maximgs', type=int,default=100, help='max number of focal stacks (per one camera) used to estimate kcams')
+parser.add_argument('--s1indices', nargs='+', default=[5,6,7,8,9], help='indices of focal distances used to estimate kcam')
 args = parser.parse_args()
 
 # construct DFV model and load weights
@@ -100,20 +100,24 @@ if(args.dataset=='ddff'):
 #calculate s2 for each focal stack
 def est_kcam(f,maximgs=20,usegt=False):
     s2error,est_kcamlist,kcamlist=0,torch.empty(0),torch.empty(0)
-    meanf=0
-    count=0
+    ddff_fstack_n=0
     for st_iter, sample_batch in enumerate(TrainImgLoader):
         #if(st_iter>200):
         #    break
         #break if we have the minimum requred number of images (maximgs) from each kcam
-        unique_kcams, _ = kcamlist.unique(dim=0, return_counts=True)
-        minn=100
-        for k in unique_kcams:
-            n=len(kcamlist[kcamlist==k])
-            if n<minn:
-                minn=n
-        if(st_iter>0 and minn>=maximgs):
-            break
+        if(args.dataset=='blender'):
+            unique_kcams, _ = kcamlist.unique(dim=0, return_counts=True)
+            minn=100
+            for k in unique_kcams:
+                n=len(kcamlist[kcamlist==k])
+                if n<minn:
+                    minn=n
+            if(st_iter>0 and minn>=maximgs):
+                break
+        if(args.dataset=='ddff'):
+            ddff_fstack_n+=1
+            if(ddff_fstack_n>=maximgs):
+                break
         if(args.dataset=='ddff'):
             img_stack, gt_disp, foc_dist=sample_batch
             X=img_stack.float().to(device_comp)
@@ -238,11 +242,13 @@ def est_kcam(f,maximgs=20,usegt=False):
 def main():
     if(args.dataset=='blender'):
         f=2.9e-3
+        #need to mutiply maximgs by len(args.s1indices) because maximgs is the number of focal stacks used
+        #but we need the number of images
+        est_kcam(f,args.maximgs*len(args.s1indices),args.usegt)
     if(args.dataset=='ddff'):
         f=9.5e-3
-    #need to mutiply maximgs by len(args.s1indices) because maximgs is the number of focal stacks used
-    #but we need the number of images
-    est_kcam(f,args.maximgs*len(args.s1indices),args.usegt)
+        est_kcam(f,args.maximgs,args.usegt)
+    
 
 if __name__ == "__main__":
     main()
