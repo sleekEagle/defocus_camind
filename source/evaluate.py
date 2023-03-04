@@ -124,6 +124,7 @@ def main():
 if __name__ == "__main__":
     main()
 
+
 #plot MSE vs dist for various S1 values
 '''
 import matplotlib.pyplot as plt
@@ -143,8 +144,20 @@ plt.legend(loc="upper left")
 plt.title('MSE vs distance')
 plt.xlabel('distance(s2)-m')
 plt.ylabel('MSE')
+plt.savefig('s2vsmse.png', dpi=500)
 plt.show()
 '''
+import util_func
+
+p=3.1e-3/256
+N=2
+f=6e-3
+s2range=[0.1,2.0]
+s1range=[0.1,2.0]
+blur_thres=3.0
+util_func.get_workable_s1s2ranges(p,N,f,s2range,s1range,blur_thres,imgratio=1)
+
+
 
 
 
