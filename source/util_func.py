@@ -466,23 +466,31 @@ blur=abs(s2-s1)/s2*1/(s1-f)*1/kcam*
 1/kcam=f^2/N*1/p*imgratio
 '''
 def get_workable_s1s2ranges(p,N,f,s2range,s1range,blur_thres,imgratio=1):
-    blur=[]
-    s1list,s2list,col=[],[],[]
+    s1list,s2list,blur=[],[],[]
+    kcam=1/(f**2/N/p)
     for s2 in np.arange(s2range[0],s2range[1]+0.05,0.05):
-        print(s2)
         for s1 in np.arange(s1range[0],s1range[1]+0.05,0.05):
-            kcam=1/(f**2/N/p)
             b=abs(s2-s1)/s2/(s1-f)/kcam
             s1list.append(s1)
             s2list.append(s2)
+            blur.append(b)
+            '''
             if(b>blur_thres):
                 col.append('red')
             else:
                 col.append('green')
-    plt.scatter(s1list,s2list,c=col)
+            '''
+    s1list=np.array(s1list)
+    s2list=np.array(s2list)
+    blur=np.array(blur)
+    #plot in range values
+    plt.scatter(s1list[blur<blur_thres],s2list[blur<blur_thres],c='green',marker='.')
+    #plot out of range values
+    plt.scatter(s1list[blur>=blur_thres],s2list[blur>=blur_thres],c='red',marker='x')
     plt.xlabel('Object Distance S2 - m')
     plt.ylabel('Focal Distance S1 - m')
-    plt.title('Workable reange of the camera')
+    plt.title('Workable reange of the camera kcam=%2.2f f=%2.1fmm'%(kcam,f*1000))
+    plt.savefig('workablerange.png', dpi=500)
     plt.show()
 
 
