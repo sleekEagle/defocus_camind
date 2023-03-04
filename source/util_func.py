@@ -465,56 +465,25 @@ blur is calculated as
 blur=abs(s2-s1)/s2*1/(s1-f)*1/kcam*
 1/kcam=f^2/N*1/p*imgratio
 '''
-p=3.1e-3/256
-N=1
-f=2.9e-3
-s1range=[0.1,1.5]
-s2range=[0.1,1.9]
-imgratio=1
-blur_thres=2.
-
-
-blurs=[]
-ind=[]
-s1=0.15
-
-for s2 in np.arange(s2range[0],s2range[1]+0.05,0.05):
-    b=abs(s2-s1)/s2*1/(s1-f)*f**2/N*1/p*imgratio
-    blurs.append(b)
-    ind.append((s1,s2))
-s2s=[i[1] for i in ind]
-#plt.scatter(s2s,blurs)
-#plt.show()  
-
-for s2 in np.arange(s2range[0],s2range[1]+0.05,0.05):
-    for s1 in np.arange(s1range[0],s1range[1]+0.05,0.05):
-        b=abs(s2-s1)/s2*1/(s1-f)*f**2/N*1/p*imgratio
-        blurs.append(b)
-        ind.append((s1,s2))
-
-
 def get_workable_s1s2ranges(p,N,f,s2range,s1range,blur_thres,imgratio=1):
     blur=[]
-    ind=[]
+    s1list,s2list,col=[],[],[]
     for s2 in np.arange(s2range[0],s2range[1]+0.05,0.05):
+        print(s2)
         for s1 in np.arange(s1range[0],s1range[1]+0.05,0.05):
             kcam=1/(f**2/N/p)
             b=abs(s2-s1)/s2/(s1-f)/kcam
-            blur.append(b)
-            ind.append((s1,s2))
-
-    #check which values are under the threshold
-    blur_np=np.array(blur)
-    good_ind=np.argwhere(blur_np<blur_thres)[:,0]
-    ind=np.array(ind)
-    ind=np.around(ind,decimals=2)
-    good_vals=ind[good_ind,:]
-    unique_s1=np.unique(good_vals[:,0])
-    print('Workable s1 and s2 ranges for the given camera: ')
-    for s1 in unique_s1:
-        vals=good_vals[good_vals[:,0]==s1]
-        if(len(vals)>1):
-            print('s1='+str(s1)+' min s2='+str(np.min(vals[:,1]))+' max s2='+str(np.max(vals[:,1])))
+            s1list.append(s1)
+            s2list.append(s2)
+            if(b>blur_thres):
+                col.append('red')
+            else:
+                col.append('green')
+    plt.scatter(s1list,s2list,c=col)
+    plt.xlabel('Object Distance S2 - m')
+    plt.ylabel('Focal Distance S1 - m')
+    plt.title('Workable reange of the camera')
+    plt.show()
 
 
 '''
