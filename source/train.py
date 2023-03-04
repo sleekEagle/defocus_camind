@@ -46,12 +46,12 @@ TRAIN_PARAMS = {
 }
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
-parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\', help='blender data path')
+parser.add_argument('--blenderpth', default='C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\focal_data\\', help='blender data path')
 parser.add_argument('--bs', type=int,default=20, help='training batch size')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
-parser.add_argument('--blurclip', default=8.0,help='Clip blur by this value : only applicable for camind model. Default=10')
-parser.add_argument('--blurweight', default=0.1,help='weight for blur loss')
+parser.add_argument('--blurclip', default=90.0,help='Clip blur by this value : only applicable for camind model. Default=10')
+parser.add_argument('--blurweight', default=0.3,help='weight for blur loss')
 #parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='path to the saved model')
 parser.add_argument('--savedmodel', default=None, help='path to the saved model')
 parser.add_argument('--s2limits', nargs='+', default=[0.1,3.],  help='the interval of depth where the errors are calculated')
@@ -65,7 +65,7 @@ if(args.aif):
     TRAIN_PARAMS['ARCH_NUM']=4
 else:
     if(args.camind):
-        expname='camind_fdistmul_N1_d_'+str(args.depthscale)+'_f'+str(args.fscale)+'_blurclip'+str(args.blurclip)+'_blurweight'+str(args.blurweight)
+        expname='camind_N1.9_f25mm_d_'+str(args.depthscale)+'_f'+str(args.fscale)+'_blurclip'+str(args.blurclip)+'_blurweight'+str(args.blurweight)
     else:
         expname='defocus_N1_d_'+str(args.depthscale)+'_f'+str(args.fscale)+'_blurweight'+str(args.blurweight)
 

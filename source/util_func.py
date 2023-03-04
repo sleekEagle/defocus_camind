@@ -234,10 +234,8 @@ def forward_pass(X, model_info,stacknum=1,camind=True,flag_step2=True,camparam=0
 def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,kcam=0,f=0,aif=False,calc_distmse=False):
     means2mse1,means2mse2,meanblurmse,meanblur=0,0,0,0
     minblur,maxblur,gt_meanblur=100,0,0
-    gt_blur,pred_blur=torch.empty(0),torch.empty(0)
     #store distance wise mse
-    distmse=torch.zeros(100)
-    distsum=torch.zeros(100)
+    distmse,distsum,distblur=torch.zeros(100),torch.zeros(100),torch.zeros(100)
 
     print('Total samples = '+str(len(loader)))
     for st_iter, sample_batch in enumerate(loader):
@@ -292,7 +290,7 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
         if(aif):
             output_step1,output_step2 = forward_pass(X,model_info,stacknum=stacknum,camind=camind,camparam=X2_fcs,foc_dist=s1_fcs,aif=aif)
         else:
-            output_step1,output_step2,_ = forward_pass(X,model_info,stacknum=stacknum,camind=camind,camparam=X2_fcs,foc_dist=s1_fcs,aif=aif)
+            output_step1,output_step2,corrected_blur = forward_pass(X,model_info,stacknum=stacknum,camind=camind,camparam=X2_fcs,foc_dist=s1_fcs,aif=aif)
 
         #gt_blur=torch.cat((gt_blur,torch.flatten(gt_step1.detach().cpu())))
         #pred_blur=torch.cat((pred_blur,torch.flatten(output_step1.detach().cpu())))
@@ -320,14 +318,17 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
         means2mse2+=mse2
 
         if(calc_distmse):
-            squareder=torch.square(output_step2*depthscale-gt_step2)*mask
+            squareder=torch.square(output_step2*depthscale-gt_step2)
             gtround=torch.round(gt_step2*10,decimals=0)
             for i in range(1,len(distmse)+1):
                 selected_val=squareder[gtround==i]
-                mask_sum=torch.sum(mask[gtround==i]).item()
-                if(mask_sum>0):
-                    er=(torch.sum(selected_val)/mask_sum).item()
+                selected_blur=corrected_blur[gtround==i]
+                #mask_sum=torch.sum(mask[gtround==i]).item()
+                er=(torch.mean(selected_val)).item()
+                b=(torch.mean(selected_blur)).item()
+                if(not(math.isnan(er) or math.isnan(b))):
                     distmse[i-1]+=er
+                    distblur[i-1]+=b
                     distsum[i-1]+=1
 
         blur=torch.sum(output_step1*mask).item()/torch.sum(mask).item()
@@ -338,11 +339,13 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
     if(calc_distmse):
         print('\ndistance wise error (distances rounded to the shown value): ')
         mse_=distmse/distsum
+        blur_=distblur/distsum
         mse_=mse_[~torch.isnan(mse_)]
+        blur_=blur_[~torch.isnan(blur_)]
         values=np.arange(0.1,(len(mse_)+1)*0.1,0.1)
         for i,v in enumerate(values):
-            print("%2.1f : %4.3f"%(v,mse_[i].item()))
-
+            #print("dist: %2.1f m : MSE: %4.3f blur: %4.3f"%(v,mse_[i].item(),blur_[i].item()))
+            print("%4.3f"%(mse_[i].item()),end=",")
     return means2mse1/len(loader),means2mse2/len(loader),meanblurmse/len(loader),meanblur/len(loader),gt_meanblur/len(loader),minblur,maxblur
 
 def kcamwise_blur(loader,model_info,depthscale,fscale,s2limits,camind,aif):
@@ -462,6 +465,33 @@ blur is calculated as
 blur=abs(s2-s1)/s2*1/(s1-f)*1/kcam*
 1/kcam=f^2/N*1/p*imgratio
 '''
+p=3.1e-3/256
+N=1
+f=2.9e-3
+s1range=[0.1,1.5]
+s2range=[0.1,1.9]
+imgratio=1
+blur_thres=2.
+
+
+blurs=[]
+ind=[]
+s1=0.15
+
+for s2 in np.arange(s2range[0],s2range[1]+0.05,0.05):
+    b=abs(s2-s1)/s2*1/(s1-f)*f**2/N*1/p*imgratio
+    blurs.append(b)
+    ind.append((s1,s2))
+s2s=[i[1] for i in ind]
+#plt.scatter(s2s,blurs)
+#plt.show()  
+
+for s2 in np.arange(s2range[0],s2range[1]+0.05,0.05):
+    for s1 in np.arange(s1range[0],s1range[1]+0.05,0.05):
+        b=abs(s2-s1)/s2*1/(s1-f)*f**2/N*1/p*imgratio
+        blurs.append(b)
+        ind.append((s1,s2))
+
 
 def get_workable_s1s2ranges(p,N,f,s2range,s1range,blur_thres,imgratio=1):
     blur=[]
