@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 import sys
 sys.path.append('../')
 from source import util_func
+from source.dataloaders import focalblender 
+
 
 '''
 Main code for Ours-FV and Ours-DFV test on FoD500 dataset  
@@ -23,7 +25,7 @@ Main code for Ours-FV and Ours-DFV test on FoD500 dataset
 
 parser = argparse.ArgumentParser(description='DFVDFF')
 parser.add_argument('--data_path', default='C://Users//lahir//focalstacks//datasets//mediumN1//',help='test data path')
-parser.add_argument('--loadmodel', default='C://Users//lahir//code//defocus//models//DFV//best.tar', help='model path')
+parser.add_argument('--loadmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\FoD500_scale0.2_nsck6_lr0.0001_ep700_b20_lvl4_diffFeat1\\best.tar', help='model path')
 parser.add_argument('--outdir', default='./FoD500/',help='output dir')
 parser.add_argument('--use_diff', default=1, choices=[0,1], help='if use differential images as input, change it according to the loaded checkpoint!')
 parser.add_argument('--level', type=int, default=4, help='num of layers in network, please take a number in [1, 4]')
@@ -60,8 +62,9 @@ def disp2depth(disp):
 def main(image_size = (256, 256)):
     model.eval()
 
-    loaders, total_steps = util_func.load_data(args.data_path,blur=0,aif=0,train_split=0.8,fstack=1,WORKERS_NUM=0,
-    BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.)
+    
+    loaders, total_steps = focalblender.load_data(args.data_path,blur=0,aif=False,train_split=0.8,fstack=1,WORKERS_NUM=0,
+            BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.)
     TrainImgLoader,ValImgLoader=loaders[0],loaders[1]
 
     # metric prepare

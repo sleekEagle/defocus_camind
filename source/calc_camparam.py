@@ -29,18 +29,18 @@ TRAIN_PARAMS = {
 }
 
 parser = argparse.ArgumentParser(description='defocu_camind')
-parser.add_argument('--dfvmodel', default='C://Users//lahir//code//defocus//models//DFV//best.tar', help='DFV model path')
+parser.add_argument('--dfvmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\FoD500_scale0.2_nsck6_lr0.0001_ep700_b20_lvl4_diffFeat1\\best.tar', help='DFV model path')
 parser.add_argument('--camindmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3_ep0.pth', help='camind model path')
-parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1-10_test_remapped\\', help='blender data path')
+parser.add_argument('--blenderpth', default='C://usr//wiss//maximov//RD//DepthFocus//Datasets//focal_data_remapped//', help='blender data path')
 parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
-parser.add_argument('--dataset', default='ddff', help='DFV model path')
-parser.add_argument('--s2limits', nargs='+', default=[0.02,0.2],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--dataset', default='blender', help='DFV model path')
+parser.add_argument('--s2limits', nargs='+', default=[0.1,0.3],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
 parser.add_argument('--blurnorm', type=int,default=8.0, help='blur normalization value used to train camind model (all blur values were divided by this value)')
-parser.add_argument('--usegt', type=bool,default=False, help='True: use GT depth values when estimation kcams False: use DFV estimated depth values instead (more realistic)')
-parser.add_argument('--maximgs', type=int,default=100, help='max number of focal stacks (per one camera) used to estimate kcams')
-parser.add_argument('--s1indices', nargs='+', default=[5,6,7,8,9], help='indices of focal distances used to estimate kcam')
+parser.add_argument('--usegt', type=bool,default=True, help='True: use GT depth values when estimation kcams False: use DFV estimated depth values instead (more realistic)')
+parser.add_argument('--maximgs', type=int,default=10, help='max number of focal stacks (per one camera) used to estimate kcams')
+parser.add_argument('--s1indices', nargs='+', default=[0,1,2,3,4], help='indices of focal distances used to estimate kcam')
 args = parser.parse_args()
 
 # construct DFV model and load weights
@@ -83,7 +83,7 @@ model_info = {'model': model,
 #dataloader
 if(args.dataset=='blender'):
     loaders, total_steps = focalblender.load_data(args.blenderpth,blur=1,aif=0,train_split=1.,fstack=1,WORKERS_NUM=0,
-        BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=args.s1indices,MAX_DPT=1)
+        BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=args.s1indices,MAX_DPT=1,kcampath=args.blenderpth+'kcams_gt.txt')
     TrainImgLoader,ValImgLoader=loaders[0],loaders[1]
 if(args.dataset=='ddff'):
     DDFF12_train = DDFF12.DDFF12Loader(args.ddffpth, stack_key="stack_train", disp_key="disp_train", n_stack=10,
@@ -112,6 +112,8 @@ def est_kcam(f,maximgs=20,usegt=False):
                 n=len(kcamlist[kcamlist==k])
                 if n<minn:
                     minn=n
+            sys.stdout.write("\r%d is done. min imgs=%d  "%(st_iter,minn))
+            sys.stdout.flush()
             if(st_iter>0 and minn>=maximgs):
                 break
         if(args.dataset=='ddff'):
@@ -138,10 +140,16 @@ def est_kcam(f,maximgs=20,usegt=False):
 
         img_stack_in   = Variable(torch.FloatTensor(img_stack))
         gt_disp    = Variable(torch.FloatTensor(gt_disp))
-        img_stack, gt_disp, foc_dist = img_stack_in.cuda(),  gt_disp.cuda(), foc_dist.cuda()
+        img_stack, foc_dist = img_stack_in.cuda(), foc_dist.cuda()
         stacked, stds, _ = DFVmodel(img_stack, foc_dist/args.fscale)
+        stacked=stacked.detach().cpu()
+        goodstds=(stds<0.2).int()
+        mask=mask*goodstds
+        mask=mask.cpu()
+        stacked=stacked*args.depthscale
 
-        s2error+=torch.mean(torch.square(stacked*args.depthscale-gt_disp)*mask).detach().cpu().item()
+        s2error+=(torch.sum(torch.square(stacked-gt_disp)*mask)).item()/(torch.sum(mask).item())
+        #s2error+=(torch.mean(torch.square(stacked*args.depthscale-gt_disp).cpu()*mask)).detach().cpu().item()
 
         stacknum = X.shape[1]
         bs=X.shape[0]
@@ -224,16 +232,26 @@ def est_kcam(f,maximgs=20,usegt=False):
             kcam_est_list=torch.cat((kcam_est_list,kcam_est))
 
         errors=((kcam_est_list-unique_kcams)/unique_kcams).numpy()
+        total_kcam_error=torch.mean(torch.square(kcam_est_list-unique_kcams)).item()
 
-        plt.scatter(unique_kcams,abs(errors))
-        plt.title('MSE of Kcam estimation')
+        plt.plot(unique_kcams,abs(errors),marker=".", markersize=7)
+        print('errors: '+str(abs(errors)))
+        if(args.usegt):
+            plt.title('Ralative absolute error of Kcam estimation using GT with %d focal stacks'%(args.maximgs))
+        else:
+            plt.title('Ralative absolute error of Kcam estimation using DFVDFF with %d focal stacks'%(args.maximgs))
         plt.xlabel('Kcam')
-        plt.ylabel('MSE')
+        plt.ylabel('Estimation Error')
+        if(args.usegt):
+            plt.savefig('Kcamestimation_GT.png', dpi=500)
+        else:
+            plt.savefig('Kcamestimation_DFVDFF.png', dpi=500)
         plt.show()
         print('real kcams: '+str(unique_kcams.tolist()))
         print('num images : '+str(nums))
         print('estimated kcams: '+str(kcam_est_list.tolist()))
         print('s2 estimation error: '+str(s2error/len(TrainImgLoader)))
+        print('kcam estimation MSE = %2.3f'%(total_kcam_error))
 
     if(args.dataset=='ddff'):
         est_kcamlist_list=reject_outliers(est_kcamlist,m=0.1)
@@ -252,3 +270,55 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+'''
+kcamgt=[1.43988, 1.58387, 1.72785, 2.15982, 2.59178, 2.87976, 3.16773, 4.03166, 4.31963, 7.19939, 11.51902, 14.39878]
+gt=[0.23136884,0.2862859,0.25634814,0.26589655,0.24420226,0.24099265,0.23953832,0.06782376,0.06455523,0.44808046,0.64349697,0.71961278]
+ddvff=[0.30400704,0.24910897,0.32361658,0.32192075,0.2666019,0.1486995,0.08911965,0.06271444,0.08848131,0.52110896,0.69459173,0.82451651]
+plt.plot(kcamgt,gt,marker=".", markersize=7,label='GT depth')
+plt.plot(kcamgt,ddvff,marker="+", markersize=7,label='predicted depth')
+#plt.xticks(kcamgt, [str(k) for k in kcamgt])
+plt.legend(loc="upper left")
+plt.title('kcam estimation error')
+plt.xlabel('Actual kcam')
+plt.ylabel('Relative error')
+plt.savefig('kcamest_error.png', dpi=500)
+plt.show()
+'''
+
+'''
+#for the focal length variation dataset
+#with estimated s2
+errors: [0.27858989 0.13343245 0.09622379 0.34380996]
+real kcams: [0.67274, 0.96875, 1.51367, 2.69097]
+num images : tensor([50, 50, 50, 50])
+estimated kcams: [0.8601585626602173, 1.0980126857757568, 1.6593210697174072, 3.616152286529541]
+s2 estimation error: 0.00028700670533284933
+kcam estimation MSE = 0.232
+
+#with GT s2
+errors: [0.23352031 0.14416418 0.23755477 0.23006212]
+real kcams: [0.67274, 0.96875, 1.51367, 2.69097]
+num images : tensor([50, 50, 50, 50])
+estimated kcams: [0.8298384547233582, 1.10840904712677, 1.8732495307922363, 3.3100602626800537]
+s2 estimation error: 0.0002652180987757023
+kcam estimation MSE = 0.139
+'''
+'''
+import matplotlib.pyplot as plt
+kcamgt=[0.67274, 0.96875, 1.51367, 2.69097]
+gt=[0.23352031,0.14416418,0.23755477,0.23006212]
+ddvff=[0.27858989,0.13343245,0.09622379,0.34380996]
+fig = plt.figure()
+ax = fig.add_axes([0.1, 0.1, 0.8, 0.8]) # main axes
+
+ax.plot(kcamgt,gt,marker=".", markersize=7,label='GT depth')
+ax.plot(kcamgt,ddvff,marker="+", markersize=7,label='predicted depth')
+ax.set_xticks(kcamgt)
+#plt.xticks(kcamgt, [str(k) for k in kcamgt])
+plt.legend(loc="upper left")
+plt.xlabel('Actual kcam')
+plt.ylabel('Relative error')
+plt.savefig('kcamest_error_f.png', dpi=500)
+plt.show()
+'''

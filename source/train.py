@@ -244,121 +244,38 @@ tensor([[0.2800, 0.2511, 0.2222, 0.1933, 0.1644, 0.1356, 0.1067, 0.0778, 0.0489,
          0.0200]])
 '''
 
-'''
-import numpy as np
-N=1
-f=2.9e-3
 
-s1list=np.arange(0.02,1.5,0.01)
-s2list=np.arange(0.02,2,0.01)
-
-blur=[]
-for s1 in s1list:
-    for s2 in s2list:
-        #blur.append(abs(s1-s2)/s2*1/(s1-f)*(f)**2/N)
-        blur.append(abs(s1-s2)/s2*1/(s1-f))
-
-print(np.max(blur))
-print(np.min(blur))
-'''
-'''
-
-# Initial preparations
-model_dir, model_name = util_func.set_output_folders(OUTPUT_PARAMS, TRAIN_PARAMS)
-device_comp = util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
-
-# Training initializations
-loaders, total_steps = focalblender.load_data(args.blenderpth,blur=1,aif=0,train_split=0.8,fstack=0,WORKERS_NUM=0,
-    BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,
-    camind=False,def_f_number=1,def_f=2.9e-3,blurclip=args.blurclip)
-
-minlist,maxlist,meanlist=[],[],[]
-for st_iter, sample_batch in enumerate(loaders[0]):
-        # Setting up input and output data
-        X = sample_batch['input'][:,0,:,:,:].float().to(device_comp)
-        Y = sample_batch['output'].float().to(device_comp)
-        
-        #blur (|s2-s1|/(s2*(s1-f)))
-        gt_step1 = Y[:, :-1, :, :]
-        #depth in m
-        gt_step2 = Y[:, -1:, :, :]
-
-        minlist.append(torch.min(gt_step1).detach().cpu().item())
-        maxlist.append(torch.max(gt_step1).detach().cpu().item())
-        meanlist.append(torch.mean(gt_step1).detach().cpu().item())
-
-print('min: '+str(sum(minlist)/len(minlist)))
-print('max: '+str(sum(maxlist)/len(maxlist)))
-print('mean: '+str(sum(meanlist)/len(meanlist)))
-'''
-
-'''
-minblur,mindist=1000,1000
-maxblur,maxdist=0,0
-mean_blur=0
-for st_iter, sample_batch in enumerate(loaders[0]):
-            # Setting up input and output data
-            X = sample_batch['input'].float().to(model_info['device_comp'])
-            Y = sample_batch['output'].float().to(model_info['device_comp'])
-            if TRAIN_PARAMS['TRAINING_MODE'] == 2:
-                #blur |s2-s1|/s2
-                gt_step1 = Y[:, :-1, :, :]
-                #depth in m
-                gt_step2 = Y[:, -1:, :, :]
-            m=torch.min(gt_step1).detach().cpu().item()
-            if(m<minblur):
-                minblur=m
-            m=torch.max(gt_step1).item()
-            if(m>maxblur):
-                maxblur=m
-            m=torch.min(gt_step2).item()
-            if(m<mindist):
-                mindist=m
-            m=torch.max(gt_step2).item()
-            if(m>maxdist):
-                maxdist=m
-            m=torch.mean(gt_step1).item()
-            mean_blur+=m
-           
-mean_blur/=len(loaders[0])
-print(minblur,maxblur,mindist,maxdist)
-'''
-
-'''
-import numpy as np
+#plotting distribution of blur
 import matplotlib.pyplot as plt
+import numpy as np
+import scipy.stats as stats
 
-s1ar=np.arange(0.1,1.5,0.047)
-s2ar=np.arange(0.1,0.8,0.01)
+f=3e-3
+p=3.1e-3/256
+s=1
+N=1
+for f in [3e-3,4e-3,5e-3]:
+    s1 = np.random.uniform(0.1,1.5,1000)
+    s2 = np.random.uniform(0.0,2.0,1000)
+    s2=np.random.normal(loc=1.0,scale=0.1,size=1000)
+    blur=np.abs(s1-s2)/s2*1/(s1-f) * f**2/N *1/p * s
+    density = stats.gaussian_kde(blur)
+    bins = np.linspace(0.1, 2.0, 1000)
+    n,bins = np.histogram(np.array(blur), bins)
+    plt.plot(bins, density(bins),label='f=%1.0fmm'%(f*1000))
 
-
-blurs=[]
-s1list=[]
-s2list=[]
-for s1 in s1ar:
-    for s2 in s2ar:
-        blurs.append(abs(s1-s2)/s2)
-        s1list.append(s1)
-        s2list.append(s2)
-
-fig = plt.figure()
-ax = plt.axes(projection='3d')
-ax.scatter(s1list, s2list, blurs, 'gray')
-plt.xlabel('s1')
-plt.ylabel('s2')
-plt.zlabel('|s1-s2|/s2')
+ax = plt.gca()
+# Hide X and Y axes label marks
+ax.yaxis.set_tick_params(labelleft=False)
+# Hide Y axes tick marks
+ax.set_yticks([])
+plt.legend()
+plt.xlabel('Blur in pixles')
+plt.ylabel('Density')
+plt.savefig('blur_distF.png', dpi=500)
 plt.show()
 
 
-
-
-blur=abs(s1-s2)/s2
-min(blur),max(blur)
-
-plt.hist(blurs)
-plt.show()
-min(blurs),max(blurs)
-'''
 
 
 

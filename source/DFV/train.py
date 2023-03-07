@@ -16,7 +16,7 @@ torch.backends.cudnn.benchmark=True
 from glob import glob
 import sys
 sys.path.append('../')
-from source import util_func
+from source.dataloaders import focalblender 
 
 '''
 Main code for Ours-FV and Ours-DFV training 
@@ -39,9 +39,10 @@ parser.add_argument('--epochs', type=int, default=700, help='number of epochs to
 parser.add_argument('--batchsize', type=int, default=20, help='samples per batch')
 
 # ====== log path ==========
-parser.add_argument('--loadmodel', default=None,   help='path to pre-trained checkpoint if any')
+parser.add_argument('--loadmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\FoD500_scale0.2_nsck6_lr0.0001_ep700_b20_lvl4_diffFeat1\\best.tar',   help='path to pre-trained checkpoint if any')
 parser.add_argument('--savemodel', default='C:\\Users\\lahir\\code\\defocus\\models\\', help='save path')
 parser.add_argument('--seed', type=int, default=2023, metavar='S',  help='random seed (default: 2021)')
+parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 
 args = parser.parse_args()
 args.logname = '_'.join(args.dataset)
@@ -86,8 +87,9 @@ print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in mo
 
 # ============ data loader ==============
 #Create data loader
-loaders, total_steps = util_func.load_data(args.FoD_pth,blur=0,aif=0,train_split=0.8,fstack=1,WORKERS_NUM=0,
-BATCH_SIZE=args.batchsize,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.9)
+
+loaders, total_steps = focalblender.load_data(args.FoD_pth,blur=0,aif=False,train_split=0.8,fstack=1,WORKERS_NUM=0,
+        BATCH_SIZE=args.batchsize,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=args.depthscale)
 TrainImgLoader,ValImgLoader=loaders[0],loaders[1]
 print('%d batches per epoch'%(len(TrainImgLoader)))
 
@@ -140,7 +142,7 @@ def valid(img_stack_in,disp, foc_dist):
     #----
     with torch.no_grad():
         pred_disp, _, _ = model(img_stack, foc_dist)
-        loss = (F.mse_loss(pred_disp[mask] , gt_disp[mask] , reduction='mean')) # use MSE loss for val
+        loss = (F.mse_loss(pred_disp[mask]*args.depthscale , gt_disp[mask]*args.depthscale , reduction='mean')) # use MSE loss for val
 
     vis = {}
     vis['mask'] = mask.type(torch.float).detach().cpu()
@@ -185,7 +187,7 @@ def main():
             gt_disp=sample_batch['output'][:,-1,:,:]
             gt_disp=torch.unsqueeze(gt_disp,dim=1).float()
             foc_dist=sample_batch['fdist'].float()
-            foc_dist=foc_dist/1.9
+            foc_dist=foc_dist/args.depthscale
 
             start_time = time.time()
             loss, vis = train(img_stack, gt_disp, foc_dist)
@@ -225,7 +227,7 @@ def main():
                 gt_disp=sample_batch['output'][:,0,:,:]
                 gt_disp=torch.unsqueeze(gt_disp,dim=1).float()
                 foc_dist=sample_batch['fdist'].float()
-                foc_dist=foc_dist/1.9
+                foc_dist=foc_dist/args.depthscale
                 
                 with torch.no_grad():
                     start_time = time.time()

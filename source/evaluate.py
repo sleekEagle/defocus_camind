@@ -38,7 +38,7 @@ OUTPUT_PARAMS = {
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
 #parser.add_argument('--blenderpth', default="C://Users//lahir//focalstacks//datasets//mediumN1-10_test_remapped//", help='blender data path')
-parser.add_argument('--blenderpth', default="C://usr//wiss//maximov//RD//DepthFocus//Datasets//focal_data_remapped//", help='blender data path')
+parser.add_argument('--blenderpth', default="C://Users//lahir//focalstacks//datasets//tmp//3//", help='blender data path')
 #parser.add_argument('--blenderpth', default="C://Users//lahir//focalstacks//datasets//mediumN1//", help='blender data path')
 parser.add_argument('--kcamfile', default='kcams_gt.txt', help='blender data path')
 parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
@@ -49,7 +49,7 @@ parser.add_argument('--fscale', default=1.9,help='divide all focal distances by 
 #parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expdefocus_d1.9_f1.9\\a03_expdefocus_d1.9_f1.9_ep0.pth', help='path to the saved model')
 #parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a04_expaif_N1_d_1.9\\a04_expaif_N1_d_1.9_ep0.pth', help='path to the saved model')
 parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3_ep0.pth', help='path to the saved model')
-parser.add_argument('--s2limits', nargs='+', default=[0.1,0.55],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--s2limits', nargs='+', default=[0.1,2.0],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
 args = parser.parse_args()
@@ -106,7 +106,7 @@ def main():
     if(args.dataset=='blender'):  
         print('evaluating on blender')         
         s2loss1,s2loss2,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,
-        dataset=args.dataset,camind=args.camind,aif=args.aif,calc_distmse=False)
+        dataset=args.dataset,camind=args.camind,aif=args.aif,calc_distmse=True)
         util_func.kcamwise_blur(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,camind=args.camind,aif=args.aif)
     elif(args.dataset=='ddff'):
         print('DDFF dataset Evaluation')
@@ -147,6 +147,8 @@ plt.ylabel('MSE')
 plt.savefig('s2vsmse.png', dpi=500)
 plt.show()
 '''
+
+'''
 import util_func
 
 p=3.1e-3/256
@@ -156,9 +158,82 @@ s2range=[0.1,2.0]
 s1range=[0.1,2.0]
 blur_thres=3.0
 util_func.get_workable_s1s2ranges(p,N,f,s2range,s1range,blur_thres,imgratio=1)
+'''
 
+'''
+Evaluating focal length variation data
+f=3mm
+s1=1.5
+s2 : 0.15 - 1.0
+MSE
+camind GTkcam:0.0516  kcamestGT:0.0500 kcamestDVF:0.0511
+defocus: 0.6561
+aif:0.978
 
+f=4mm
+s1=1.5
+s2: 0.15-1.0
+MSE
+camind GTkcam:0.0478  kcamestGT:0.0422 kcamestDVF:0.0449
+defocus: 0.385
+aif: 0.0826
 
+f=5mm
+s1=1.5
+s2: 0.3-1.0
+MSE
+camind GTkcam:0.0547  kcamestGT:0.0488 kcamestDVF:0.0511
+defocus : 0.1087
+aif: 0.831
+
+f=6mm
+s1=1.5
+s2: 0.5 - 1.0
+MSE
+camind GTkcam:0.0620  kcamestGT:0.0604 kcamestDVF:0.0585
+defocus : 0.0637
+aif:0.1016
+'''
+
+'''
+dist wise error 
+s1=1.5m
+with estimatef kcam
+f=3mm
+0.053,0.062,0.043,0.025,0.018,0.031,0.052,0.080,0.134,0.204,0.302,0.401,0.500,0.614,0.786,0.952,1.122,1.233
+f=4mm
+0.057,0.051,0.053,0.058,0.035,0.032,0.035,0.046,0.066,0.118,0.218,0.289,0.363,0.509,0.592,0.770,0.886,1.061
+f=5mm
+0.055,0.024,0.031,0.051,0.057,0.048,0.036,0.059,0.100,0.158,0.165,0.243,0.250,0.391,0.687,0.749,0.746,0.903
+f=6mm
+0.107,0.056,0.054,0.037,0.065,0.048,0.085,0.107,0.122,0.153,0.279,0.329,0.392,0.629,0.762,0.577,0.808,1.116
+'''
+'''
+import matplotlib.pyplot as plt
+s2=[0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8]
+#DVF estimated kcam
+mse1=[0.053,0.062,0.043,0.025,0.018,0.031,0.052,0.080,0.134,0.204,0.302,0.401,0.500,0.614,0.786,0.952,1.122,1.233]
+mse2=[0.057,0.051,0.053,0.058,0.035,0.032,0.035,0.046,0.066,0.118,0.218,0.289,0.363,0.509,0.592,0.770,0.886,1.061]
+mse3=[0.055,0.024,0.031,0.051,0.057,0.048,0.036,0.059,0.100,0.158,0.165,0.243,0.250,0.391,0.687,0.749,0.746,0.903]
+mse4=[0.107,0.056,0.054,0.037,0.065,0.048,0.085,0.107,0.122,0.153,0.279,0.329,0.392,0.629,0.762,0.577,0.808,1.116]
+
+#GT kcams
+mse1=[0.185,0.102,0.081,0.055,0.084,0.044,0.102,0.107,0.096,0.131,0.228,0.290,0.347,0.553,0.730,0.527,0.850,0.815]
+mse2=[0.068,0.031,0.031,0.054,0.066,0.050,0.037,0.055,0.097,0.143,0.164,0.256,0.259,0.412,0.709,0.750,0.749,0.842]
+mse3=[0.069,0.052,0.057,0.060,0.041,0.033,0.033,0.043,0.063,0.109,0.209,0.279,0.360,0.500,0.580,0.732,0.856,1.009]
+mse4=[0.061,0.071,0.051,0.032,0.022,0.028,0.042,0.066,0.111,0.172,0.266,0.361,0.456,0.554,0.723,0.874,1.021,1.118]
+
+plt.plot(s2,mse1,'-b',label='f=3mm',marker=".", markersize=7)
+plt.plot(s2,mse2,'-r',label='f=4mm',marker="*", markersize=7)
+plt.plot(s2,mse3,'-g',label='f=5mm',marker="1", markersize=7)
+plt.plot(s2,mse4,'-m',label='f=6mm',marker="d", markersize=7)
+plt.legend(loc="upper left")
+plt.title('MSE vs distance')
+plt.xlabel('distance(s2)-m')
+plt.ylabel('MSE')
+plt.savefig('s2vsmse_f_DVFkcam.png', dpi=500)
+plt.show()
+'''
 
 
 
