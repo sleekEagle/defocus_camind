@@ -46,7 +46,7 @@ TRAIN_PARAMS = {
 }
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
-parser.add_argument('--blenderpth', default='C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\focal_data\\', help='blender data path')
+parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
 parser.add_argument('--bs', type=int,default=20, help='training batch size')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
@@ -55,7 +55,7 @@ parser.add_argument('--blurweight', default=0.3,help='weight for blur loss')
 #parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='path to the saved model')
 parser.add_argument('--savedmodel', default=None, help='path to the saved model')
 parser.add_argument('--s2limits', nargs='+', default=[0.1,3.],  help='the interval of depth where the errors are calculated')
-parser.add_argument('--dataset', default='blender', help='blender data path')
+parser.add_argument('--dataset', default='defocusnet', help='blender data path')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defpcusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
 args = parser.parse_args()
@@ -65,7 +65,7 @@ if(args.aif):
     TRAIN_PARAMS['ARCH_NUM']=4
 else:
     if(args.camind):
-        expname='camind_N1.9_f25mm_d_'+str(args.depthscale)+'_f'+str(args.fscale)+'_blurclip'+str(args.blurclip)+'_blurweight'+str(args.blurweight)
+        expname='camind_defnetdata_'+str(args.depthscale)+'_f'+str(args.fscale)+'_blurclip'+str(args.blurclip)+'_blurweight'+str(args.blurweight)
     else:
         expname='defocus_N1_d_'+str(args.depthscale)+'_f'+str(args.fscale)+'_blurweight'+str(args.blurweight)
 
@@ -198,7 +198,7 @@ def main():
     # Training initializations
     loaders, total_steps = focalblender.load_data(args.blenderpth,blur=1,aif=args.aif,train_split=0.8,fstack=0,WORKERS_NUM=0,
     BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,
-    camind=args.camind,def_f_number=1,def_f=2.9e-3,blurclip=args.blurclip)
+    camind=args.camind,def_f_number=1,def_f=2.9e-3,blurclip=args.blurclip,dataset=args.dataset)
 
     model, inp_ch_num, out_ch_num = util_func.load_model(TRAIN_PARAMS)
     model = model.to(device=device_comp)
@@ -244,7 +244,7 @@ tensor([[0.2800, 0.2511, 0.2222, 0.1933, 0.1644, 0.1356, 0.1067, 0.0778, 0.0489,
          0.0200]])
 '''
 
-
+'''
 #plotting distribution of blur
 import matplotlib.pyplot as plt
 import numpy as np
@@ -274,7 +274,7 @@ plt.xlabel('Blur in pixles')
 plt.ylabel('Density')
 plt.savefig('blur_distF.png', dpi=500)
 plt.show()
-
+'''
 
 
 

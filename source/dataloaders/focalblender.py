@@ -116,7 +116,8 @@ class ImageDataset(torch.utils.data.Dataset):
     """Focal place dataset."""
 
     def __init__(self, root_dir, transform_fnc=None,blur=1,aif=0,fstack=0,focus_dist=[0.1,.15,.3,0.7,1.5,100000],
-                req_f_indx=[0,2], max_dpt = 3.,camind=True,def_f_number=0,def_f=0,blurclip=10.,kcampath=None):
+                req_f_indx=[0,2], max_dpt = 3.,camind=True,def_f_number=0,def_f=0,blurclip=10.,kcampath=None,
+                dataset='blender'):
 
         self.root_dir = root_dir
         print("image data root dir : " +str(self.root_dir))
@@ -126,6 +127,7 @@ class ImageDataset(torch.utils.data.Dataset):
         self.aif=aif
         self.fstack=fstack
         self.img_num = len(focus_dist)
+        self.dataset=dataset
 
         self.focus_dist = focus_dist
         self.req_f_idx=req_f_indx
@@ -173,14 +175,17 @@ class ImageDataset(torch.utils.data.Dataset):
         mat_dpt = mat_dpt_scaled.copy()[:, :, np.newaxis]
 
         #extract N from the file name
-        kcam_val=float(self.imglist_dpt[idx_dpt].split('_')[1])
-        if(not self.kcampath):
-            kcam=kcam_val
-        else:
-            kcam=self.kcamdict[kcam_val]
+        if(self.dataset=='blender'):
+            kcam_val=float(self.imglist_dpt[idx_dpt].split('_')[1])
+            if(not self.kcampath):
+                kcam=kcam_val
+            else:
+                kcam=self.kcamdict[kcam_val]
+            f=float(self.imglist_dpt[idx_dpt].split('_')[2])
+        elif(self.dataset=='defocusnet'):
+            kcam=1
+            f=2.9
 
-        f=float(self.imglist_dpt[idx_dpt].split('_')[2])
-       
         ind = idx * self.img_num
 
         #if all in-focus image is also needed append that to the input matrix
@@ -232,10 +237,12 @@ class ToTensor(object):
 
 
 def load_data(data_dir, blur,aif,train_split,fstack,
-              WORKERS_NUM, BATCH_SIZE, FOCUS_DIST, REQ_F_IDX, MAX_DPT,camind=True,def_f_number=0,def_f=0,blurclip=10.0,kcampath=None):
+              WORKERS_NUM, BATCH_SIZE, FOCUS_DIST, REQ_F_IDX, MAX_DPT,camind=True,def_f_number=0,def_f=0,blurclip=10.0,kcampath=None,
+              dataset='blender'):
     img_dataset = ImageDataset(root_dir=data_dir,blur=blur,aif=aif,transform_fnc=transforms.Compose([ToTensor()]),
                                focus_dist=FOCUS_DIST,fstack=fstack,req_f_indx=REQ_F_IDX, max_dpt=MAX_DPT,
-                               camind=camind,def_f_number=def_f_number,def_f=def_f,blurclip=blurclip,kcampath=kcampath)
+                               camind=camind,def_f_number=def_f_number,def_f=def_f,blurclip=blurclip,kcampath=kcampath,
+                               dataset=dataset)
 
     indices = list(range(len(img_dataset)))
     split = int(len(img_dataset) * train_split)

@@ -55,9 +55,6 @@ class AENet(nn.Module):
             nn.Conv2d(self.num_filter, self.out_dim, kernel_size=3, stride=1, padding=1),
             nn.LeakyReLU()
         )
-        self.conv_out = nn.Sequential(
-            nn.Conv2d(self.num_filter, self.out_dim, kernel_size=3, stride=1, padding=1),
-        )
 
         if flag_step2:
             self.conv_down2_0 = self.convsblocks(2, self.num_filter * 1, act_fnc)
@@ -168,14 +165,11 @@ class AENet(nn.Module):
                 else:
                     end = self.conv_end(joint)
                     out_col_blur = self.conv_out_blur(end)
-                    out_col = self.conv_out(end)
 
                     if i == 0:
                         out_blur = out_col_blur
-                        out=out_col
                     else:
                         out_blur = torch.cat([out_blur, out_col_blur], dim=1)
-                        out = torch.cat([out, out_col], dim=1)
         if(camind):
             mul=out_blur*camparam
         else:
