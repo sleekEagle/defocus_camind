@@ -116,7 +116,7 @@ class ImageDataset(torch.utils.data.Dataset):
     """Focal place dataset."""
 
     def __init__(self, root_dir, transform_fnc=None,blur=1,aif=0,fstack=0,focus_dist=[0.1,.15,.3,0.7,1.5,100000],
-                req_f_indx=[0,2], max_dpt = 3.,camind=True,def_f_number=0,def_f=0,blurclip=10.,kcampath=None,
+                req_f_indx=[0,2], max_dpt = 3.,blurclip=10.,kcampath=None,
                 dataset='blender'):
 
         self.root_dir = root_dir
@@ -131,13 +131,10 @@ class ImageDataset(torch.utils.data.Dataset):
 
         self.focus_dist = focus_dist
         self.req_f_idx=req_f_indx
-        self.camind=camind
         self.blurclip=blurclip
         self.kcampath=kcampath
         if(kcampath):
             self.kcamdict=read_kcamfile(kcampath)
-        if(not self.camind):
-            self.camera = CameraLens(def_f, f_number=def_f_number)
 
         ##### Load and sort all images
         self.imglist_all = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "All.tif"]
@@ -183,9 +180,8 @@ class ImageDataset(torch.utils.data.Dataset):
                 kcam=self.kcamdict[kcam_val]
             f=float(self.imglist_dpt[idx_dpt].split('_')[2])
         elif(self.dataset=='defocusnet'):
-            kcam=1
+            kcam=1.43988
             f=2.9
-
         ind = idx * self.img_num
 
         #if all in-focus image is also needed append that to the input matrix
@@ -202,12 +198,9 @@ class ImageDataset(torch.utils.data.Dataset):
             mat_all = img_all.copy() / 255.
             mat_all=np.expand_dims(mat_all,axis=-1)
             mats_input = np.concatenate((mats_input, mat_all), axis=3)
-            if(self.camind):
-                img_msk = get_blur(self.focus_dist[req], img_dpt,f,kcam)
-                img_msk = img_msk / self.blurclip
-            else:
-                img_msk=self.camera.get_coc(self.focus_dist[req], img_dpt)
-                img_msk = np.clip(img_msk, 0, 1.0e-4) / 1.0e-4
+            
+            img_msk = get_blur(self.focus_dist[req], img_dpt,f,kcam)
+            img_msk = img_msk / self.blurclip
             #img_msk = np.clip(img_msk, 0, 1.0e-4) / 1.0e-4
             mat_msk = img_msk.copy()[:, :, np.newaxis]
 

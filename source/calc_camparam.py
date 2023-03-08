@@ -30,17 +30,17 @@ TRAIN_PARAMS = {
 
 parser = argparse.ArgumentParser(description='defocu_camind')
 parser.add_argument('--dfvmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\FoD500_scale0.2_nsck6_lr0.0001_ep700_b20_lvl4_diffFeat1\\best.tar', help='DFV model path')
-parser.add_argument('--camindmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3_ep0.pth', help='camind model path')
+parser.add_argument('--camindmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\defocus_trained\\camind.pth', help='camind model path')
 parser.add_argument('--blenderpth', default='C://usr//wiss//maximov//RD//DepthFocus//Datasets//focal_data_remapped//', help='blender data path')
 parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
-parser.add_argument('--dataset', default='blender', help='DFV model path')
-parser.add_argument('--s2limits', nargs='+', default=[0.1,0.3],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--dataset', default='ddff', help='DFV model path')
+parser.add_argument('--s2limits', nargs='+', default=[0.02,0.28],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
 parser.add_argument('--blurnorm', type=int,default=8.0, help='blur normalization value used to train camind model (all blur values were divided by this value)')
 parser.add_argument('--usegt', type=bool,default=True, help='True: use GT depth values when estimation kcams False: use DFV estimated depth values instead (more realistic)')
-parser.add_argument('--maximgs', type=int,default=10, help='max number of focal stacks (per one camera) used to estimate kcams')
-parser.add_argument('--s1indices', nargs='+', default=[0,1,2,3,4], help='indices of focal distances used to estimate kcam')
+parser.add_argument('--maximgs', type=int,default=100, help='max number of focal stacks (per one camera) used to estimate kcams')
+parser.add_argument('--s1indices', nargs='+', default=[5,6,7,8,9], help='indices of focal distances used to estimate kcam')
 args = parser.parse_args()
 
 # construct DFV model and load weights
@@ -105,21 +105,6 @@ def est_kcam(f,maximgs=20,usegt=False):
         #if(st_iter>200):
         #    break
         #break if we have the minimum requred number of images (maximgs) from each kcam
-        if(args.dataset=='blender'):
-            unique_kcams, _ = kcamlist.unique(dim=0, return_counts=True)
-            minn=100
-            for k in unique_kcams:
-                n=len(kcamlist[kcamlist==k])
-                if n<minn:
-                    minn=n
-            sys.stdout.write("\r%d is done. min imgs=%d  "%(st_iter,minn))
-            sys.stdout.flush()
-            if(st_iter>0 and minn>=maximgs):
-                break
-        if(args.dataset=='ddff'):
-            ddff_fstack_n+=1
-            if(ddff_fstack_n>=maximgs):
-                break
         if(args.dataset=='ddff'):
             img_stack, gt_disp, foc_dist=sample_batch
             X=img_stack.float().to(device_comp)
@@ -147,7 +132,8 @@ def est_kcam(f,maximgs=20,usegt=False):
         mask=mask*goodstds
         mask=mask.cpu()
         stacked=stacked*args.depthscale
-
+        if(torch.sum(mask).item()==0):
+            continue
         s2error+=(torch.sum(torch.square(stacked-gt_disp)*mask)).item()/(torch.sum(mask).item())
         #s2error+=(torch.mean(torch.square(stacked*args.depthscale-gt_disp).cpu()*mask)).detach().cpu().item()
 
@@ -187,6 +173,22 @@ def est_kcam(f,maximgs=20,usegt=False):
                 est_kcamlist=torch.cat((est_kcamlist,torch.mean(est_kcam).detach().cpu().unsqueeze(dim=0)))
                 if(args.dataset=='blender'):
                     kcamlist=torch.cat((kcamlist,sample_batch['kcam'].detach().cpu()))
+
+        if(args.dataset=='blender'):
+            unique_kcams, _ = kcamlist.unique(dim=0, return_counts=True)
+            minn=100
+            for k in unique_kcams:
+                n=len(kcamlist[kcamlist==k])
+                if n<minn:
+                    minn=n
+            sys.stdout.write("\r%d is done. min imgs=%d  "%(st_iter,minn))
+            sys.stdout.flush()
+            if(st_iter>0 and minn>=maximgs):
+                break
+        if(args.dataset=='ddff'):
+            ddff_fstack_n+=1
+            if(ddff_fstack_n>=maximgs):
+                break
 
         #estimating f
         '''

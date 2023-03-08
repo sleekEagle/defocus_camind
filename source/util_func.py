@@ -250,7 +250,7 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
             X=img_stack.float().to(model_info['device_comp'])
             Y=gt_disp.float().to(model_info['device_comp'])
             gt_step2=Y
-        if(dataset=='blender'):
+        if(dataset=='blender' or dataset=='defocusnet'):
             X = sample_batch['input'][:,0,:,:,:].float().to(model_info['device_comp'])
             Y = sample_batch['output'].float().to(model_info['device_comp'])
             gt_step1 = Y[:, :-1, :, :]
@@ -272,7 +272,7 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
         for t in range(stacknum):
             #iterate through the batch
             for i in range(X.shape[0]):
-                if(dataset=='blender'):
+                if(dataset=='blender'or dataset=='defocusnet'):
                     focus_distance=sample_batch['fdist'][i].item()
                     f=sample_batch['f'].item()
                     #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/fscale*sample_batch['kcam'][i].item()/1.4398
@@ -307,7 +307,7 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
         #calculate s2 provided that s2>s1
         s2est=0.1*1./(1-blurpred)
         #blur mse
-        if(dataset=='blender'):
+        if(dataset=='blender' or dataset=='defocusnet'):
             blurmse=torch.sum(torch.square(output_step1-gt_step1)*mask).item()/torch.sum(mask).item()
             meanblurmse+=blurmse
         #calculate MSE value
@@ -333,7 +333,7 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
 
         blur=torch.sum(output_step1*mask).item()/torch.sum(mask).item()
         meanblur+=blur
-        if(dataset=='blender'):
+        if(dataset=='blender' or dataset=='defocusnet'):
             gtblur=torch.sum(gt_step1*mask).item()/torch.sum(mask).item()
             gt_meanblur+=gtblur
     if(calc_distmse):
@@ -418,10 +418,17 @@ def kcamwise_blur(loader,model_info,depthscale,fscale,s2limits,camind,aif):
 
     mseres = torch.zeros_like(unique_labels, dtype=torch.float).scatter_add_(0, labels, mse_all)
     mseres = mseres / labels_count
-
-    print(unique_kcams)
-    print(blurres)
-    print(mseres)
+    
+    print('kcams:')
+    for i in unique_kcams.tolist():
+        print('%2.3f,'%(i),end=" ")
+    print('\nmean blurs:')
+    for i in blurres.tolist():
+        print('%2.3f,'%(i),end=" ")
+    print('\nMSE:')
+    for i in mseres.tolist():
+        print('%2.3f,'%(i),end=" ")
+    print('')
 
     theoratical_blur=torch.tensor([blurres[0].item()]).repeat_interleave(repeats=blurres.shape[0])*unique_kcams[0].item()
     theoratical_blur=theoratical_blur/unique_kcams
