@@ -230,11 +230,11 @@ class ToTensor(object):
 
 
 def load_data(data_dir, blur,aif,train_split,fstack,
-              WORKERS_NUM, BATCH_SIZE, FOCUS_DIST, REQ_F_IDX, MAX_DPT,camind=True,def_f_number=0,def_f=0,blurclip=10.0,kcampath=None,
+              WORKERS_NUM, BATCH_SIZE, FOCUS_DIST, REQ_F_IDX, MAX_DPT,blurclip=10.0,kcampath=None,
               dataset='blender'):
     img_dataset = ImageDataset(root_dir=data_dir,blur=blur,aif=aif,transform_fnc=transforms.Compose([ToTensor()]),
                                focus_dist=FOCUS_DIST,fstack=fstack,req_f_indx=REQ_F_IDX, max_dpt=MAX_DPT,
-                               camind=camind,def_f_number=def_f_number,def_f=def_f,blurclip=blurclip,kcampath=kcampath,
+                               blurclip=blurclip,kcampath=kcampath,
                                dataset=dataset)
 
     indices = list(range(len(img_dataset)))
