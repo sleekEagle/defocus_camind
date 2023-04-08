@@ -343,9 +343,13 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
         mse_=mse_[~torch.isnan(mse_)]
         blur_=blur_[~torch.isnan(blur_)]
         values=np.arange(0.1,(len(mse_)+1)*0.1,0.1)
+        print('distances:')
         for i,v in enumerate(values):
-            #print("dist: %2.1f m : MSE: %4.3f blur: %4.3f"%(v,mse_[i].item(),blur_[i].item()))
+            print("%4.3f"%(v),end=",")
+        print('\nMSE:')
+        for i,v in enumerate(values):
             print("%4.3f"%(mse_[i].item()),end=",")
+        print('')
     return means2mse1/len(loader),means2mse2/len(loader),meanblurmse/len(loader),meanblur/len(loader),gt_meanblur/len(loader),minblur,maxblur
 
 def kcamwise_blur(loader,model_info,depthscale,fscale,s2limits,camind,aif):
