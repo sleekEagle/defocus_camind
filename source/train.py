@@ -20,7 +20,7 @@ from sacred import Experiment
 import csv
 import util_func
 import argparse
-from dataloaders import DDFF12,focalblender
+from dataloaders import DDFF12,focalblender,NUY_blurred
 
 TRAIN_PARAMS = {
     'ARCH_NUM': 3,
@@ -46,7 +46,8 @@ TRAIN_PARAMS = {
 }
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
-parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
+# parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nuy_depth\\', help='blender data path')
+parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\', help='blender data path')
 parser.add_argument('--bs', type=int,default=20, help='training batch size')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
@@ -55,8 +56,8 @@ parser.add_argument('--blurweight', default=1.0,help='weight for blur loss')
 #parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='path to the saved model')
 parser.add_argument('--savedmodel', default=None, help='path to the saved model')
 parser.add_argument('--s2limits', nargs='+', default=[0.1,3.],  help='the interval of depth where the errors are calculated')
-parser.add_argument('--dataset', default='defocusnet', help='blender data path')
-parser.add_argument('--camind', type=bool,default=False, help='True: use camera independent model. False: use defocusnet model')
+parser.add_argument('--dataset', default='blender', help='blender data path')
+parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
 args = parser.parse_args()
 
@@ -72,8 +73,8 @@ else:
     
 
 OUTPUT_PARAMS = {
-    'RESULT_PATH': 'C:\\Users\\lahir\\code\\defocus\\results\\',
-    'MODEL_PATH': 'C:\\Users\\lahir\\code\\defocus\\models\\',
+    'RESULT_PATH': 'C:\\Users\\lahir\\code\\defocus\\camind\\nuy\\results\\',
+    'MODEL_PATH': 'C:\\Users\\lahir\\code\\defocus\\camind\\nuy\\',
     'EXP_NAME':expname,
 }
 
@@ -95,16 +96,41 @@ def train_model(loaders, model_info):
         blur_sum=0
         mean_blur=0
         for st_iter, sample_batch in enumerate(loaders[0]):
-            # Setting up input and output data
-            X = sample_batch['input'][:,0,:,:,:].float().to(model_info['device_comp'])
-            Y = sample_batch['output'].float().to(model_info['device_comp'])
-            optimizer.zero_grad()
-            
-            #blur (|s2-s1|/(s2*(s1-f)))
-            gt_step1 = Y[:, :-1, :, :]
-            #depth in m
-            gt_step2 = Y[:, -1:, :, :]
-            
+            if(args.dataset=="nyu"):
+                X=sample_batch['rgb'].float().to(model_info['device_comp'])
+                depth=sample_batch['depth']
+                blur=sample_batch['blur']
+                gt_step1=blur.float().to(model_info['device_comp'])
+                gt_step2=depth.float().to(model_info['device_comp'])
+                gt_step1=torch.unsqueeze(gt_step1,dim=1)
+                gt_step2=torch.unsqueeze(gt_step2,dim=1)
+
+                # plot data
+                # import matplotlib.pyplot as plt
+                # img=X[0,:,:,:].detach().cpu().permute(1,2,0)
+                # plt.imshow(img)
+                # plt.show()
+                # d=gt_step2[0,0,:,:].detach().cpu()
+                # plt.imshow(d)
+                # plt.show()
+
+                # f, axarr = plt.subplots(1,2)
+                # axarr[0].imshow(img)
+                # axarr[1].imshow(d)
+                # plt.show()
+
+
+            else:
+                # Setting up input and output data
+                X = sample_batch['input'][:,0,:,:,:].float().to(model_info['device_comp'])
+                Y = sample_batch['output'].float().to(model_info['device_comp'])
+                optimizer.zero_grad()
+                
+                #blur (|s2-s1|/(s2*(s1-f)))
+                gt_step1 = Y[:, :-1, :, :]
+                #depth in m
+                gt_step2 = Y[:, -1:, :, :]
+                
             mask=(gt_step2>args.s2limits[0]).int()*(gt_step2<args.s2limits[1]).int()
 
             mean_blur_=torch.sum
@@ -126,33 +152,26 @@ def train_model(loaders, model_info):
                 for i in range(X.shape[0]):
                     focus_distance=sample_batch['fdist'][i].item()
                     f=sample_batch['f'][i].item()
-                    #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()
-                    #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/args.fscale
                     if(not args.aif):
                         X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*sample_batch['kcam'][i].item()*(focus_distance-f)/args.fscale
                         s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/args.fscale
 
             X2_fcs = X2_fcs.float().to(model_info['device_comp'])
             s1_fcs = s1_fcs.float().to(model_info['device_comp'])
-            #print('fdist:'+str(sample_batch['fdist']))
+
             # Forward and compute loss
             if(args.aif):
                 output_step1,output_step2= util_func.forward_pass(X, model_info,stacknum=stacknum,camind=args.camind,camparam=X2_fcs,foc_dist=s1_fcs,aif=args.aif)
             else:
                 output_step1,output_step2,_ = util_func.forward_pass(X, model_info,stacknum=stacknum,camind=args.camind,camparam=X2_fcs,foc_dist=s1_fcs,aif=args.aif)
-            #print('mean blur pred:'+str(torch.mean(output_step1))+' min:'+str(torch.min(output_step1))+' max:'+str(torch.max(output_step1)))
-            #print('mean gt blur:'+str(torch.mean(gt_step1))+' min:'+str(torch.min(gt_step1))+' max:'+str(torch.max(gt_step1)))
-            #print('mean gt depth:'+str(torch.mean(gt_step2))+' min:'+str(torch.min(gt_step2))+' max:'+str(torch.max(gt_step2)))
-            #output_step1=output_step1*(0.1-2.9e-3)*7
             blur_sum+=torch.sum(output_step1*mask).item()/torch.sum(mask)
-            #blurpred=output_step1*(0.1-2.9e-3)*1.4398*7
-            depth_loss=criterion(output_step2*mask, gt_step2/args.depthscale*mask)
+            depth_loss=criterion(output_step2*mask, gt_step2*mask)
             #we don't train blur if input images are AiF
             if(args.aif):
                 blur_loss=0 
             else:
                 blur_loss=criterion(output_step1*mask, gt_step1*mask)
-            loss=depth_loss+blur_loss*args.blurweight
+            loss=depth_loss+blur_loss
 
             absloss=torch.sum(torch.abs(output_step1-gt_step1)*mask)/torch.sum(mask)
             absloss_sum+=absloss.item()
@@ -194,17 +213,23 @@ def main():
     # Initial preparations
     model_dir, model_name = util_func.set_output_folders(OUTPUT_PARAMS, TRAIN_PARAMS)
     device_comp = util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
-
     # Training initializations
     if(args.dataset=='blender'):
-        loaders, total_steps = focalblender.load_data(args.blenderpth,blur=1,aif=args.aif,train_split=0.8,fstack=0,WORKERS_NUM=0,
+        loaders, total_steps = focalblender.load_data(args.datapath,blur=1,aif=args.aif,train_split=0.8,fstack=0,WORKERS_NUM=0,
         BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,
         blurclip=args.blurclip,dataset=args.dataset)
     elif(args.dataset=='defocusnet'):
-        loaders, total_steps = focalblender.load_data(args.blenderpth,blur=1,aif=args.aif,train_split=0.8,fstack=0,WORKERS_NUM=0,
+        loaders, total_steps = focalblender.load_data(args.datapath,blur=1,aif=args.aif,train_split=0.8,fstack=0,WORKERS_NUM=0,
         BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,
         blurclip=args.blurclip,dataset=args.dataset)
-
+    elif(args.dataset=='nyu'):
+        rgbpath=args.datapath+"refocused1\\"
+        depthpath=args.datapath+"depth\\"
+        kcampath=args.datapath+"refocused1\\camparam.txt"
+        blurclip=1
+        loaders, total_steps = NUY_blurred.load_data(rgbpath=rgbpath,depthpath=depthpath,blur=1,train_split=0.8,fstack=0,WORKERS_NUM=0,
+                BATCH_SIZE=20,MAX_DPT=args.depthscale,blurclip=1,kcampath=kcampath)
+        
     model, inp_ch_num, out_ch_num = util_func.load_model(TRAIN_PARAMS)
     model = model.to(device=device_comp)
     model_params = model.parameters()

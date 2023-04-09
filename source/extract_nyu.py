@@ -17,3 +17,17 @@ for i in range(depths.shape[0]):
     #write rgb image
     # rgb=imgs[i,:,:,:]
     # break
+
+
+#remap files
+from os.path import isfile, join, isdir
+from os import listdir, mkdir
+import os
+
+input_path='C:\\Users\\lahir\\data\\nuy_depth\\refocused4\\'
+output_path='C:\\Users\\lahir\\data\\nuy_depth\\refocused4_r\\'
+files = [f for f in listdir(input_path) if isfile(join(input_path, f)) and f[-4:] == ".png"]
+
+for file in files:
+    newname=str(int(file.split('_')[0]))+'.png'
+    os.popen('copy '+input_path+file+' '+output_path+newname)

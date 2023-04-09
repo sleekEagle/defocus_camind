@@ -120,6 +120,7 @@ class ImageDataset(torch.utils.data.Dataset):
                 dataset='blender'):
 
         self.root_dir = root_dir
+        print('focal blender dataset...')
         print("image data root dir : " +str(self.root_dir))
         self.transform_fnc = transform_fnc
 
