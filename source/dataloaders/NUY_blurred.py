@@ -169,8 +169,8 @@ def load_data(rgbpath,depthpath, blur,train_split,fstack,
     tr=transforms.Compose([
         Transform(),
         transforms.RandomCrop((256,256)),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomVerticalFlip()
+        # transforms.RandomHorizontalFlip(),
+        # transforms.RandomVerticalFlip()
         ])
     img_dataset = ImageDataset(rgbpath=rgbpath,depthpath=depthpath,blur=blur,transform_fnc=tr,
                                fstack=fstack, max_dpt=MAX_DPT,

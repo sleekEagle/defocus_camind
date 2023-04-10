@@ -250,11 +250,19 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
             X=img_stack.float().to(model_info['device_comp'])
             Y=gt_disp.float().to(model_info['device_comp'])
             gt_step2=Y
-        if(dataset=='blender' or dataset=='defocusnet'):
+        elif(dataset=='blender' or dataset=='defocusnet'):
             X = sample_batch['input'][:,0,:,:,:].float().to(model_info['device_comp'])
             Y = sample_batch['output'].float().to(model_info['device_comp'])
             gt_step1 = Y[:, :-1, :, :]
             gt_step2 = Y[:, -1:, :, :]
+        elif(dataset=="nyu"):
+            X=sample_batch['rgb'].float().to(model_info['device_comp'])
+            depth=sample_batch['depth']
+            blur=sample_batch['blur']
+            gt_step1=blur.float().to(model_info['device_comp'])
+            gt_step2=depth.float().to(model_info['device_comp'])
+            gt_step1=torch.unsqueeze(gt_step1,dim=1)
+            gt_step2=torch.unsqueeze(gt_step2,dim=1)
 
         stacknum = 1
 
@@ -272,7 +280,7 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
         for t in range(stacknum):
             #iterate through the batch
             for i in range(X.shape[0]):
-                if(dataset=='blender'or dataset=='defocusnet'):
+                if(dataset=='blender'or dataset=='defocusnet' or dataset=='nyu'):
                     focus_distance=sample_batch['fdist'][i].item()
                     f=sample_batch['f'].item()
                     #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/fscale*sample_batch['kcam'][i].item()/1.4398
