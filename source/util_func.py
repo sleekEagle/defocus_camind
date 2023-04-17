@@ -283,16 +283,17 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
                 if(dataset=='blender'or dataset=='defocusnet' or dataset=='nyu'):
                     focus_distance=sample_batch['fdist'][i].item()
                     f=sample_batch['f'].item()
+                    k=sample_batch['kcam'][i].item()
                     #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/fscale*sample_batch['kcam'][i].item()/1.4398
                     #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]/sample_batch['kcam'][i].item()*1.4398*(focus_distance-sample_batch['f'][i].item())/fscale
                     if(not aif):
-                        X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*sample_batch['kcam'][i].item()*(focus_distance-f)/fscale
+                        X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*k*(focus_distance-f)/0.04
                 elif(dataset=='ddff'):
                     focus_distance=foc_dist[i].item()
                     if(not aif):
                         X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*kcam*(focus_distance-f)/fscale
-                if(not aif):
-                    s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/fscale
+                # if(not aif):
+                #     s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/3.0
         X2_fcs = X2_fcs.float().to(model_info['device_comp'])
         s1_fcs = s1_fcs.float().to(model_info['device_comp'])
         if(aif):
@@ -322,7 +323,10 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
         mse1=torch.sum(torch.square(s2est-gt_step2)*mask).item()/torch.sum(mask).item()
         #mse_val, ssim_val, psnr_val=util_func.compute_all_metrics(output_step2*mask,gt_step2*mask)
         means2mse1+=mse1
-        mse2=torch.sum(torch.square(output_step2*depthscale-gt_step2)*mask).item()/torch.sum(mask).item()
+        if(dataset=='nyu'):
+             mse2=torch.sum(torch.square(focus_distance/output_step2-focus_distance/gt_step2)*mask).item()/torch.sum(mask).item()
+        else:
+            mse2=torch.sum(torch.square(output_step2*depthscale-gt_step2)*mask).item()/torch.sum(mask).item()
         means2mse2+=mse2
 
         if(calc_distmse):

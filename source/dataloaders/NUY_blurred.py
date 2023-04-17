@@ -15,6 +15,15 @@ import matplotlib.pyplot as plt
 import cv2
 import torchvision.transforms.functional as F
 
+# N=1
+# f =50.0e-3
+# s1= 3.0
+# px =36e-6
+
+# k=f**2/N/px
+# k=1/k
+# k
+
 CROP_PIX=15
 
 #read kcams.txt file
@@ -107,6 +116,8 @@ class ImageDataset(torch.utils.data.Dataset):
             print('kcam:'+str(self.kcam))
             print('f:'+str(self.f))
 
+            print(self.kcam*(3-self.f))
+
         ##### Load and sort all images
         self.imglist_rgb = [f for f in listdir(rgbpath) if isfile(join(rgbpath, f)) and f[-4:] == ".png"]
         self.imglist_dpt = [f for f in listdir(depthpath) if isfile(join(depthpath, f)) and f[-4:] == ".png"]
@@ -133,6 +144,7 @@ class ImageDataset(torch.utils.data.Dataset):
         #mat_dpt_scaled = img_dpt_scaled / 1.9
         mat_dpt_scaled = img_dpt/self.max_dpt
         mat_dpt = mat_dpt_scaled.copy()[:, :, np.newaxis]
+        mat_dpt = self.s1/mat_dpt
 
         #read rgb image
         im = cv2.imread(self.rgbpath + self.imglist_rgb[idx],cv2.IMREAD_UNCHANGED)
@@ -158,9 +170,9 @@ class ImageDataset(torch.utils.data.Dataset):
 class Transform(object):
     def __call__(self, image):
         image=torch.permute(image,(2,0,1))
-        _,w,h=image.shape
-        cropped=F.crop(image,CROP_PIX,CROP_PIX,w-CROP_PIX,h-CROP_PIX)
-        return cropped
+        # _,w,h=image.shape
+        # cropped=F.crop(image,CROP_PIX,CROP_PIX,w-CROP_PIX,h-CROP_PIX)
+        return image
     
 
 
@@ -169,8 +181,8 @@ def load_data(rgbpath,depthpath, blur,train_split,fstack,
     tr=transforms.Compose([
         Transform(),
         transforms.RandomCrop((256,256)),
-        # transforms.RandomHorizontalFlip(),
-        # transforms.RandomVerticalFlip()
+        transforms.RandomHorizontalFlip(),
+        transforms.RandomVerticalFlip()
         ])
     img_dataset = ImageDataset(rgbpath=rgbpath,depthpath=depthpath,blur=blur,transform_fnc=tr,
                                fstack=fstack, max_dpt=MAX_DPT,
@@ -196,17 +208,17 @@ def load_data(rgbpath,depthpath, blur,train_split,fstack,
     return [loader_train, loader_valid], total_steps
 
 
-depthpath='C:\\Users\\lahir\\data\\nuy_depth\\depth\\'
-rgbpath='C:\\Users\\lahir\\data\\nuy_depth\\refocused1\\'
-kcampath='C:\\Users\\lahir\\data\\nuy_depth\\refocused1\\camparam.txt'
-blurclip=1
-loaders, total_steps = load_data(rgbpath=rgbpath,depthpath=depthpath,blur=1,train_split=0.8,fstack=0,WORKERS_NUM=0,
-        BATCH_SIZE=1,MAX_DPT=1.0,blurclip=blurclip,kcampath=kcampath)
-for st_iter, sample_batch in enumerate(loaders[0]):
-    rgb=sample_batch['rgb']
-    depth=sample_batch['depth']
-    blur=sample_batch['blur']
-    break
+# depthpath='C:\\Users\\lahir\\data\\nuy_depth\\depth\\'
+# rgbpath='C:\\Users\\lahir\\data\\nuy_depth\\refocused5\\'
+# kcampath='C:\\Users\\lahir\\data\\nuy_depth\\refocused5\\camparam.txt'
+# blurclip=1
+# loaders, total_steps = load_data(rgbpath=rgbpath,depthpath=depthpath,blur=1,train_split=0.8,fstack=0,WORKERS_NUM=0,
+#         BATCH_SIZE=1,MAX_DPT=1.0,blurclip=blurclip,kcampath=kcampath)
+# for st_iter, sample_batch in enumerate(loaders[0]):
+#     rgb=sample_batch['rgb']
+#     depth=sample_batch['depth']
+#     blur=sample_batch['blur']
+#     break
 
 # import matplotlib.pyplot as plt
 # img=rgb[0,:,:,:]
@@ -227,16 +239,32 @@ for st_iter, sample_batch in enumerate(loaders[0]):
 # plt.imshow(b)
 # plt.savefig('C:\\Users\\lahir\\data\\nuy_depth\\blur.png')
 
+'''
+X min=0.0
+X max=1.0
+X mean=0.39910310504313146
+depth min=0.7129999995231628
+depth max=9.98900032043457
+depth mean=2.9440300959878383
+blur min=0.0
+blur max=33.832828521728516
+blur mean=6.4919104153118425
+'''
 
-def get_data_stats(datapath,blurclip):
-    depthpath='C:\\Users\\lahir\\data\\nuy_depth\\depth\\'
-    rgbpath='C:\\Users\\lahir\\data\\nuy_depth\\refocused1\\'
-    kcampath='C:\\Users\\lahir\\data\\nuy_depth\\refocused1\\camparam.txt'
+
+def get_data_stats(blurclip):
+    depthpath='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\depth\\'
+    rgbpath='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\refocused1\\'
+    kcampath='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\refocused1\\camparam.txt'
     blurclip=1
-    loaders, total_steps = load_data(rgbpath=rgbpath,depthpath=depthpath,blur=1,aif=0,train_split=0.8,fstack=0,WORKERS_NUM=0,
-            BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=blurclip,kcampath=kcampath)
+    loaders, total_steps = load_data(rgbpath=rgbpath,depthpath=depthpath,blur=1,train_split=0.8,fstack=0,WORKERS_NUM=0,
+        BATCH_SIZE=1,MAX_DPT=1.0,blurclip=blurclip,kcampath=kcampath)
     print('stats of train data')
-    get_loader_stats(loaders[0])
+    depthlist=get_loader_stats(loaders[0])
+    #plot histogram of GT depths
+    depthlist=depthlist.numpy()
+    _ = plt.hist(depthlist, bins='auto') 
+    plt.show()
     print('______')
 
 #data statistics of the input images
@@ -244,6 +272,7 @@ def get_loader_stats(loader):
     xmin,xmax,xmean,count=100,0,0,0
     depthmin,depthmax,depthmean=100,0,0
     blurmin,blurmax,blurmean=100,0,0
+    depthlist=torch.empty(0)
     for st_iter, sample_batch in enumerate(loader):
         # Setting up input and output data
         X=sample_batch['rgb']
@@ -262,7 +291,8 @@ def get_loader_stats(loader):
             xmax=xmax_
         xmean+=torch.mean(X).cpu().item()
         count+=1
-        
+        t=torch.flatten(gt_step2)
+        depthlist=torch.concat((depthlist,t),axis=0)
         depthmin_=torch.min(gt_step2).cpu().item()
         if(depthmin_<depthmin):
             depthmin=depthmin_
@@ -290,6 +320,7 @@ def get_loader_stats(loader):
     print('blur min='+str(blurmin))
     print('blur max='+str(blurmax))
     print('blur mean='+str(blurmean/count))
+    return depthlist
 
 '''
 blur_thres=7.0
