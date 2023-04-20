@@ -26,6 +26,7 @@ class AENet(nn.Module):
 
     def __init__(self,in_dim,out_dim, num_filter, n_blocks=3, flag_step2=False):
         super(AENet, self).__init__()
+        print('defNet_arch3')
         
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -57,7 +58,7 @@ class AENet(nn.Module):
         )
 
         if flag_step2:
-            self.conv_down2_0 = self.convsblocks(2, self.num_filter * 1, act_fnc)
+            self.conv_down2_0 = self.convsblocks(1, self.num_filter * 1, act_fnc)
             self.pool2_0 = self.poolblock()
 
 
@@ -111,7 +112,7 @@ class AENet(nn.Module):
         return pool
 
 
-    def forward(self,x,inp=3,k=8,camind=True,flag_step2=True,camparam=0,foc_dist=0):
+    def forward(self,x,inp=3,k=1,camind=True,flag_step2=True,camparam=0,foc_dist=0):
         down1 = []
         pool_temp = []
         for j in range(self.n_blocks + 1):
@@ -185,7 +186,7 @@ class AENet(nn.Module):
                         joint_pool = torch.cat([pool_temp[0], pool_max[0]], dim=1)
                         pool_temp.pop(0)
                     else:
-                        joint_pool =  torch.cat([mul[:, 1 * i:1 * (i + 1), :, :],foc_dist[:, 1 * i:1 * (i + 1), :, :]], dim=1)
+                        joint_pool =  mul[:, 1 * i:1 * (i + 1), :, :]
                     conv = self.__getattr__('conv_down2_' + str(j + 0))(joint_pool)
                     down_temp.append(conv)
 

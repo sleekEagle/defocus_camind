@@ -117,7 +117,7 @@ class ImageDataset(torch.utils.data.Dataset):
 
     def __init__(self, root_dir, transform_fnc=None,blur=1,aif=0,fstack=0,focus_dist=[0.1,.15,.3,0.7,1.5,100000],
                 req_f_indx=[0,2], max_dpt = 3.,blurclip=10.,kcampath=None,
-                dataset='blender'):
+                dataset='blender',out_depth=False):
 
         self.root_dir = root_dir
         print('focal blender dataset...')
@@ -149,6 +149,7 @@ class ImageDataset(torch.utils.data.Dataset):
         self.imglist_allif.sort()
 
         self.max_dpt = max_dpt
+        self.out_depth=out_depth
 
     def __len__(self):
         return int(len(self.imglist_dpt))
@@ -162,16 +163,24 @@ class ImageDataset(torch.utils.data.Dataset):
 
         # add RGB, CoC, Depth inputs
         mats_input = np.zeros((256, 256, 3,0))
-        mats_output = np.zeros((256, 256, 0))
+        mats_blur = np.zeros((256, 256, 0))
 
         ##### Read and process an image
         idx_dpt = int(idx)
         img_dpt = read_dpt(self.root_dir + self.imglist_dpt[idx_dpt])
         #img_dpt_scaled = np.clip(img_dpt, 0., 1.9)
         #mat_dpt_scaled = img_dpt_scaled / 1.9
-        mat_dpt_scaled = img_dpt/self.max_dpt
-        mat_dpt = mat_dpt_scaled.copy()[:, :, np.newaxis]
-
+        if(self.out_depth):
+            mat_dpt_scaled = img_dpt/self.max_dpt
+            mat_dpt = mat_dpt_scaled.copy()[:, :, np.newaxis]
+        #output s1/depth. So we need multiple outputs for each s1
+        else:
+            mat_dpt=np.zeros((256, 256, 0))
+            for req in reqar:
+                dpt_=self.focus_dist[req]/img_dpt
+                dpt_=np.expand_dims(dpt_,axis=2)
+                mat_dpt=np.concatenate((mat_dpt,dpt_),axis=-1)
+        
         #extract N from the file name
         if(self.dataset=='blender'):
             kcam_val=float(self.imglist_dpt[idx_dpt].split('_')[1])
@@ -206,37 +215,34 @@ class ImageDataset(torch.utils.data.Dataset):
             mat_msk = img_msk.copy()[:, :, np.newaxis]
 
             #append blur to the output
-            mats_output = np.concatenate((mats_output, mat_msk), axis=2)
+            mats_blur = np.concatenate((mats_blur, mat_msk), axis=2)
             fdist=np.concatenate((fdist,[self.focus_dist[req]]),axis=0)
-        
-        #append depth to the output
-        mats_output = np.concatenate((mats_output, mat_dpt), axis=2)
-        
-        sample = {'input': mats_input, 'output': mats_output}
-
+                
+        sample = {'input': mats_input, 'depth': mat_dpt,'blur':mats_blur}
         if self.transform_fnc:
             sample = self.transform_fnc(sample)
-        sample = {'input': sample['input'], 'output': sample['output'],'fdist':fdist,'kcam':kcam,'f':f*1e-3}
+        sample = {'input': sample['input'], 'depth': sample['depth'],'blur':sample['blur'],'fdist':fdist,'kcam':kcam,'f':f*1e-3}
         return sample
 
 
 class ToTensor(object):
     def __call__(self, sample):
-        mats_input, mats_output = sample['input'], sample['output']
+        mats_input, mats_depth,mats_blur = sample['input'], sample['depth'],sample['blur']
 
         mats_input = mats_input.transpose((3,2, 0, 1))
-        mats_output = mats_output.transpose((2, 0, 1))
+        mats_depth = mats_depth.transpose((2, 0, 1))
+        mats_blur = mats_blur.transpose((2, 0, 1))
         return {'input': torch.from_numpy(mats_input),
-                'output': torch.from_numpy(mats_output),}
-
+                'depth': torch.from_numpy(mats_depth),
+                'blur': torch.from_numpy(mats_blur)}
 
 def load_data(data_dir, blur,aif,train_split,fstack,
-              WORKERS_NUM, BATCH_SIZE, FOCUS_DIST, REQ_F_IDX, MAX_DPT,blurclip=10.0,kcampath=None,
-              dataset='blender'):
+              WORKERS_NUM, BATCH_SIZE, FOCUS_DIST, REQ_F_IDX, MAX_DPT=1,blurclip=1,kcampath=None,
+              dataset='blender',out_depth=True):
     img_dataset = ImageDataset(root_dir=data_dir,blur=blur,aif=aif,transform_fnc=transforms.Compose([ToTensor()]),
                                focus_dist=FOCUS_DIST,fstack=fstack,req_f_indx=REQ_F_IDX, max_dpt=MAX_DPT,
                                blurclip=blurclip,kcampath=kcampath,
-                               dataset=dataset)
+                               dataset=dataset,out_depth=out_depth)
 
     indices = list(range(len(img_dataset)))
     split = int(len(img_dataset) * train_split)
@@ -259,10 +265,16 @@ def load_data(data_dir, blur,aif,train_split,fstack,
 
 
 datapath='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\'
-datapath='C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\focal_data\\'
-blurclip=1
+# datapath='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\'
+# # datapath='C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\focal_data\\'
+# blurclip=1
+
+# loaders, total_steps = load_data(datapath,blur=1,aif=0,train_split=0.8,fstack=1,WORKERS_NUM=0,
+#         BATCH_SIZE=10,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=1,dataset='defocusnet',
+#         out_depth=False)
+
 def get_data_stats(datapath,blurclip):
-    loaders, total_steps = load_data(datapath,blur=1,aif=0,train_split=0.8,fstack=0,WORKERS_NUM=0,
+    loaders, total_steps = load_data(datapath,blur=1,aif=0,train_split=0.8,fstack=1,WORKERS_NUM=0,
         BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=blurclip)
     print('stats of train data')
     get_loader_stats(loaders[0])
@@ -276,7 +288,8 @@ def get_loader_stats(loader):
     for st_iter, sample_batch in enumerate(loader):
         # Setting up input and output data
         X = sample_batch['input'][:,0,:,:,:].float()
-        Y = sample_batch['output'].float()
+        depth=sample_batch['depth'].float()
+        blur=sample_batch['blur'].float()
 
         xmin_=torch.min(X).cpu().item()
         if(xmin_<xmin):
@@ -286,27 +299,22 @@ def get_loader_stats(loader):
             xmax=xmax_
         xmean+=torch.mean(X).cpu().item()
         count+=1
-    
-        #blur (|s2-s1|/(s2*(s1-f)))
-        gt_step1 = Y[:, :-1, :, :]
-        #depth in m
-        gt_step2 = Y[:, -1:, :, :]
-        
-        depthmin_=torch.min(gt_step2).cpu().item()
+
+        depthmin_=torch.min(depth).cpu().item()
         if(depthmin_<depthmin):
             depthmin=depthmin_
-        depthmax_=torch.max(gt_step2).cpu().item()
+        depthmax_=torch.max(depth).cpu().item()
         if(depthmax_>depthmax):
             depthmax=depthmax_
-        depthmean+=torch.mean(gt_step2).cpu().item()
+        depthmean+=torch.mean(depth).cpu().item()
 
-        blurmin_=torch.min(gt_step1).cpu().item()
+        blurmin_=torch.min(blur).cpu().item()
         if(blurmin_<blurmin):
             blurmin=blurmin_
-        blurmax_=torch.max(gt_step1).cpu().item()
+        blurmax_=torch.max(blur).cpu().item()
         if(blurmax_>blurmax):
             blurmax=blurmax_
-        blurmean+=torch.mean(gt_step1).cpu().item()
+        blurmean+=torch.mean(blur).cpu().item()
 
     print('X min='+str(xmin))
     print('X max='+str(xmax))
@@ -330,6 +338,7 @@ s1range=[0.1,1.5]
 
 get_workable_s1s2ranges(p,N,f,s2range,s1range,blur_thres)
 '''
+# get_loader_stats(loaders[0])
 
 
 

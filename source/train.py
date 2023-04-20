@@ -15,88 +15,236 @@ import csv
 import util_func
 import argparse
 from dataloaders import DDFF12,focalblender,NUY_blurred
+from arch import dofNet_arch3
+import sys
 
-TRAIN_PARAMS = {
-    'ARCH_NUM': 3,
-    'FILTER_NUM': 16,
-    'LEARNING_RATE': 0.00001,
-    'FLAG_GPU': True,
-    'EPOCHS_NUM': 500, 'EPOCH_START': 0,
-    'RANDOM_LEN_INPUT': 0,
-    'TRAINING_MODE':2, #1: do not use step 1 , 2: use step 2
-
-    'MODEL_STEPS': 1,
-
-    'MODEL1_LOAD': False,
-    'MODEL1_ARCH_NUM': 3,
-    'MODEL1_NAME': "dmediumN1_t01", 'MODEL1_INPUT_NUM': 1,
-    'MODEL1_EPOCH': 0, 'MODEL1_FILTER_NUM': 16,
-    'MODEL1_LOSS_WEIGHT': 1,
-
-    'MODEL2_LOAD': False,
-    'MODEL2_NAME': "a01_d06_t01",
-    'MODEL2_EPOCH': 500,
-    'MODEL2_TRAIN_STEP': True,
-}
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
-parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\', help='blender data path')
-# parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
+# parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\', help='blender data path')
+parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
 parser.add_argument('--bs', type=int,default=20, help='training batch size')
-parser.add_argument('--depthscale', default=10.,help='divide all depths by this value')
+parser.add_argument('--epochs', type=int,default=1000, help='training batch size')
+parser.add_argument('--depthscale', default=15.,help='divide all depths by this value')
 parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
-parser.add_argument('--blurclip', default=76.0,help='Clip blur by this value : only applicable for camind model. Default=10')
+parser.add_argument('--blurclip', default=6.5,help='Clip blur by this value : only applicable for camind model. Default=10')
 parser.add_argument('--blurweight', default=1.0,help='weight for blur loss')
-#parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth', help='path to the saved model')
-parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_nyu_10.0_f1.9_blurclip76.0_blurweight1.0\\train2.pth', help='path to the saved model')
-parser.add_argument('--s2limits', nargs='+', default=[0.7,10.],  help='the interval of depth where the errors are calculated')
-parser.add_argument('--dataset', default='nyu', help='blender data path')
+parser.add_argument('--savepath', default='C:\\Users\\lahir\\code\\defocus\\models\\', help='path to the saved model')
+parser.add_argument('--checkpt', default=None, help='path to the saved model')
+parser.add_argument('--s2limits', nargs='+', default=[0.1,1.8],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--dataset', default='defocusnet', help='blender data path')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
+parser.add_argument('--lr', default=0.0001,help='dilvide all depths by this value')
 args = parser.parse_args()
 
 if(args.aif):
     expname='aif_defnetdata_'+str(args.depthscale)
-    TRAIN_PARAMS['ARCH_NUM']=4
 else:
     if(args.camind):
-        expname='camind_nyu_'+str(args.depthscale)+'_f'+str(args.fscale)+'_blurclip'+str(args.blurclip)+'_blurweight'+str(args.blurweight)
+        expname='camind_'+str(args.dataset)+'_'+str(args.depthscale)+'_f'+str(args.fscale)+'_blurclip'+str(args.blurclip)+'_blurweight'+str(args.blurweight)
     else:
-        expname='defocus_defnet_'+str(args.depthscale)+'_f'+str(args.fscale)
+        expname='nocamind_'+str(args.dataset)+'_'+str(args.depthscale)+'_f'+str(args.fscale)
 
+'''
+load model
+'''
+#GPU or CPU
+device_comp = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-OUTPUT_PARAMS = {
-    'RESULT_PATH': 'C:\\Users\\lahir\\code\\defocus\\results\\',
-    'MODEL_PATH': 'C:\\Users\\lahir\\code\\defocus\\models\\',
-    'EXP_NAME':expname,
-}
+ch_inp_num = 3
+ch_out_num = 1
+model = dofNet_arch3.AENet(ch_inp_num, 1, 16, flag_step2=True)
+model = model.to(device_comp)
+model_params = model.parameters()
+
+# loading weights of the first step
+if args.checkpt:
+    print('loading model....')
+    print('model path :'+args.checkpt)
+    pretrained_dict = torch.load(args.checkpt)
+    model_dict = model.state_dict()
+    for param_tensor in model_dict:
+        for param_pre in pretrained_dict:
+            if param_tensor == param_pre:
+                model_dict.update({param_tensor: pretrained_dict[param_pre]})
+    model.load_state_dict(model_dict)
+
+'''
+Load data
+'''
+ # Training initializations
+if(args.dataset=='blender'):
+    loaders, total_steps = focalblender.load_data(args.datapath,blur=1,aif=args.aif,train_split=0.8,fstack=0,WORKERS_NUM=0,
+    BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,
+    blurclip=args.blurclip,dataset=args.dataset)
+elif(args.dataset=='defocusnet'):
+    loaders, total_steps = focalblender.load_data(args.datapath,blur=1,aif=0,train_split=0.8,fstack=0,WORKERS_NUM=0,
+    BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=args.blurclip,dataset=args.dataset,
+    out_depth=False)
+elif(args.dataset=='nyu'):
+    rgbpath=args.datapath+"refocused1\\"
+    depthpath=args.datapath+"depth\\"
+    kcampath=args.datapath+"refocused1\\camparam.txt"
+    loaders, total_steps = NUY_blurred.load_data(rgbpath=rgbpath,depthpath=depthpath,blur=1,train_split=0.8,fstack=0,WORKERS_NUM=0,
+            BATCH_SIZE=20,MAX_DPT=1,blurclip=args.blurclip,kcampath=kcampath)
+
 
 # ============ init ===============
 torch.manual_seed(2023)
 torch.cuda.manual_seed(2023)
 
-def train_model(loaders, model_info):
+def eval(loader,kcam=0,f=0,calc_distmse=False,out_depth=False):
+    meanMSE,meanblurmse,meanblur=0,0,0
+    minblur,maxblur,gt_meanblur=100,0,0
+    #store distance wise mse
+    distmse,distsum,distblur=torch.zeros(100),torch.zeros(100),torch.zeros(100)
+
+    print('Total samples = '+str(len(loader)))
+    for st_iter, sample_batch in enumerate(loader):
+        #if(st_iter>100):
+        #    break
+        #sys.stdout.write(str(st_iter)+" of "+str(len(loader))+" is done")
+        sys.stdout.write("\r%d is done"%st_iter)
+        sys.stdout.flush()
+
+        if(args.dataset=='ddff'):
+            img_stack, gt_disp, foc_dist=sample_batch
+            X=img_stack.float().to(device_comp)
+            Y=gt_disp.float().to(device_comp)
+            gt_step2=Y
+        elif(args.dataset=='blender' or args.dataset=='defocusnet'):
+            # Setting up input and output data
+            X = sample_batch['input'][:,0,:,:,:].float().to(device_comp)
+            depth=sample_batch['depth'].float().to(device_comp)
+            blur=sample_batch['blur'].float().to(device_comp)
+            focus_distance=sample_batch['fdist']
+            focus_distance=torch.unsqueeze(focus_distance,dim=2).unsqueeze(dim=3)
+            focus_distance=torch.repeat_interleave(focus_distance,depth.shape[2],dim=2).repeat_interleave(depth.shape[3],dim=3)
+            focus_distance=focus_distance.to(device_comp)
+        elif(args.dataset=="nyu"):
+            X=sample_batch['rgb'].float().to(device_comp)
+            depth=sample_batch['depth'].float().to(device_comp)
+            blur=sample_batch['blur'].float().to(device_comp)
+            depth=torch.unsqueeze(depth,dim=1)
+            depth=torch.unsqueeze(depth,dim=1)
+            focus_distance=sample_batch['fdist']
+            focus_distance=torch.unsqueeze(focus_distance,dim=2).unsqueeze(dim=3)
+            focus_distance=torch.repeat_interleave(focus_distance,depth.shape[2],dim=2).repeat_interleave(depth.shape[3],dim=3)
+            focus_distance=focus_distance.to(device_comp)
+
+        if(len(args.s2limits)==2):
+            mask=(focus_distance/depth>args.s2limits[0])*(focus_distance/depth<args.s2limits[1])
+            s=torch.sum(mask).item()
+            #continue loop if there are no ground truth data in the range we are interested in
+            if(s==0):
+                continue
+        else:
+            mask=torch.ones_like(gt_step2)
+        
+        stacknum = 1
+        X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
+        s1_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
+        for t in range(stacknum):
+            #iterate through the batch
+            for i in range(X.shape[0]):
+                if(args.dataset=='blender'or args.dataset=='defocusnet' or args.dataset=='nyu'):
+                    fd=sample_batch['fdist'][i].item()
+                    f=sample_batch['f'][i].item()
+                    k=sample_batch['kcam'][i].item()
+                    if(not args.aif):
+                        X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*k*(fd-f)
+                elif(args.dataset=='ddff'):
+                    fd=foc_dist[i].item()
+                    if(not args.aif):
+                        X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*kcam*(fd-f)
+                # if(not aif):
+                #     s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/3.0
+        X2_fcs = X2_fcs.float().to(device_comp)
+        s1_fcs = s1_fcs.float().to(device_comp)
+        
+        pred_depth,pred_blur,corrected_blur=model(X,camind=args.camind,camparam=X2_fcs,foc_dist=s1_fcs)
+        
+        #gt_blur=torch.cat((gt_blur,torch.flatten(gt_step1.detach().cpu())))
+        #pred_blur=torch.cat((pred_blur,torch.flatten(output_step1.detach().cpu())))
+
+        minblur_=torch.min(pred_blur).item()
+        if(minblur_<minblur):   
+            minblur=minblur_
+        maxblur_=torch.max(pred_depth).item()
+        if(maxblur_>maxblur):
+            maxblur=maxblur_
+
+        #output_step1=output_step1*(0.1-2.9e-3)*7
+        blurpred=pred_blur
+        #calculate s2 provided that s2>s1
+        s2est=0.1*1./(1-blurpred)
+        #blur mse
+        if(args.dataset=='blender' or args.dataset=='defocusnet'):
+            blurmse=torch.mean(torch.square(pred_blur*args.blurclip-blur)[mask>0]).item()
+            meanblurmse+=blurmse
+        #calculate MSE value
+        if(out_depth):
+            mse=torch.mean(torch.square(pred_depth-depth)[mask>0]).item()
+        else:
+            mse=torch.mean(torch.square(focus_distance/(pred_depth*args.depthscale)-focus_distance/depth)[mask>0]).item()
+        meanMSE+=mse
+
+        if(calc_distmse):
+            squareder=torch.square(depth*args.depthscale-gt_step2)
+            gtround=torch.round(gt_step2*10,decimals=0)
+            for i in range(1,len(distmse)+1):
+                selected_val=squareder[gtround==i]
+                selected_blur=corrected_blur[gtround==i]
+                #mask_sum=torch.sum(mask[gtround==i]).item()
+                er=(torch.mean(selected_val)).item()
+                b=(torch.mean(selected_blur)).item()
+                if(not(math.isnan(er) or math.isnan(b))):
+                    distmse[i-1]+=er
+                    distblur[i-1]+=b
+                    distsum[i-1]+=1
+
+        blur=torch.sum(pred_blur*mask).item()/torch.sum(mask).item()
+        meanblur+=blur
+        if(args.dataset=='blender' or args.dataset=='defocusnet'):
+            gtblur=torch.sum(blur*mask).item()/torch.sum(mask).item()
+            gt_meanblur+=gtblur
+    if(calc_distmse):
+        print('\ndistance wise error (distances rounded to the shown value): ')
+        mse_=distmse/distsum
+        blur_=distblur/distsum
+        mse_=mse_[~torch.isnan(mse_)]
+        blur_=blur_[~torch.isnan(blur_)]
+        values=np.arange(0.1,(len(mse_)+1)*0.1,0.1)
+        print('distances:')
+        for i,v in enumerate(values):
+            print("%4.3f"%(v),end=",")
+        print('\nMSE:')
+        for i,v in enumerate(values):
+            print("%4.3f"%(mse_[i].item()),end=",")
+        print('')
+    return meanMSE/len(loader),meanblurmse/len(loader),meanblur/len(loader),gt_meanblur/len(loader),minblur,maxblur
+
+def train_model(loader):
     criterion = torch.nn.MSELoss()
     #criterion=F.smooth_l1_loss(reduction='none')
-    optimizer = optim.Adam(model_info['model_params'], lr=TRAIN_PARAMS['LEARNING_RATE'])
+    optimizer = optim.Adam(model_params, lr=args.lr)
 
     ##### Training
-    print("Total number of epochs:", TRAIN_PARAMS['EPOCHS_NUM'])
-    for e_iter in range(TRAIN_PARAMS['EPOCHS_NUM'] - TRAIN_PARAMS['EPOCH_START']):
-        epoch_iter = e_iter + TRAIN_PARAMS['EPOCH_START']
+    print("Total number of epochs:", args.epochs)
+    for e_iter in range(args.epochs):
+        epoch_iter = e_iter
         loss_sum, iter_count,absloss_sum= 0,0,0
         depthloss_sum,blurloss_sum=0,0
         blur_sum=0
         mean_blur=0
-        for st_iter, sample_batch in enumerate(loaders[0]):
+        for st_iter, sample_batch in enumerate(loader):
             if(args.dataset=="nyu"):
-                X=sample_batch['rgb'].float().to(model_info['device_comp'])
-                depth=sample_batch['depth']
-                blur=sample_batch['blur']
-                gt_step1=blur.float().to(model_info['device_comp'])
-                gt_step2=depth.float().to(model_info['device_comp'])
-                gt_step1=torch.unsqueeze(gt_step1,dim=1)
-                gt_step2=torch.unsqueeze(gt_step2,dim=1)
+                X=sample_batch['rgb'].float().to(device_comp)
+                depth=sample_batch['depth'].float().to(device_comp)
+                blur=sample_batch['blur'].float().to(device_comp)
+                depth=torch.unsqueeze(depth,dim=1)
+                blur=torch.unsqueeze(blur,dim=1)
+                stacknum=X.shape
 
                 # plot data
                 # import matplotlib.pyplot as plt
@@ -114,18 +262,17 @@ def train_model(loaders, model_info):
 
             else:
                 # Setting up input and output data
-                X = sample_batch['input'][:,0,:,:,:].float().to(model_info['device_comp'])
-                Y = sample_batch['output'].float().to(model_info['device_comp'])
-                optimizer.zero_grad()
+                X = sample_batch['input'][:,0,:,:,:].float().to(device_comp)
+                depth=sample_batch['depth'].float().to(device_comp)
+                blur=sample_batch['blur'].float().to(device_comp)
+            focus_distance=sample_batch['fdist']
+            focus_distance=torch.unsqueeze(focus_distance,dim=2).unsqueeze(dim=3)
+            focus_distance=torch.repeat_interleave(focus_distance,depth.shape[2],dim=2).repeat_interleave(depth.shape[3],dim=3)
+            focus_distance=focus_distance.to(device_comp)
                 
-                #blur (|s2-s1|/(s2*(s1-f)))
-                gt_step1 = Y[:, :-1, :, :]
-                #depth in m
-                gt_step2 = Y[:, -1:, :, :]
+            optimizer.zero_grad()
             
-            mask=(gt_step2>args.s2limits[0]).int()*(gt_step2<args.s2limits[1]).int()
-
-            mean_blur_=torch.sum
+            mask=(focus_distance/depth>args.s2limits[0])*(focus_distance/depth<args.s2limits[1]).int()
 
             # we only use focal stacks with a single image
             stacknum = 1
@@ -144,45 +291,32 @@ def train_model(loaders, model_info):
                 for i in range(X.shape[0]):
                     focus_distance=sample_batch['fdist'][i].item()
                     f=sample_batch['f'][i].item()
-                    k=sample_batch['kcam'][i].item()                    
-                   
-                    #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :] * (focus_distance-sample_batch['f'][i].item())*sample_batch['kcam'][i].item()
-                    #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/args.fscale
+                    k=sample_batch['kcam'][i].item()     
                     if(not args.aif):
-                        X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*k*(focus_distance-f)/0.04
+                        X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*k*(focus_distance-f)
                         # s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/3.0
 
-            X2_fcs = X2_fcs.float().to(model_info['device_comp'])
-            s1_fcs = s1_fcs.float().to(model_info['device_comp'])
-            #print('fdist:'+str(sample_batch['fdist']))
+            X2_fcs = X2_fcs.float().to(device_comp)
+            s1_fcs = s1_fcs.float().to(device_comp)
+
             # Forward and compute loss
-            if(args.aif):
-                output_step1,output_step2= util_func.forward_pass(X, model_info,stacknum=stacknum,camind=args.camind,camparam=X2_fcs,foc_dist=s1_fcs,aif=args.aif)
-            else:
-                output_step1,output_step2,_ = util_func.forward_pass(X, model_info,stacknum=stacknum,camind=args.camind,camparam=X2_fcs,foc_dist=s1_fcs,aif=args.aif)
-            
-            blur_sum+=torch.sum(output_step1[mask>0]).item()/torch.sum(mask)
-            #blurpred=output_step1*(0.1-2.9e-3)*1.4398*7
-            depth_loss=criterion(output_step2[mask>0], (gt_step2)[mask>0])
-            # print('depth gt:'+str(torch.mean(gt_step2/args.depthscale)))
-            # print('depth pred:'+str(torch.mean(output_step2)))
-            # print('depth loss:'+str(depth_loss))
+            pred_depth,pred_blur,_=model(X,camind=args.camind,camparam=X2_fcs,foc_dist=s1_fcs)
+           
+            blur_sum+=torch.sum(pred_blur[mask>0]).item()/torch.sum(mask)
+
+            depth_loss=criterion(pred_depth[mask>0], (depth/args.depthscale)[mask>0])
             #we don't train blur if input images are AiF
             if(args.aif):
                 blur_loss=0 
             else:
-                blur_loss=criterion(output_step1[mask>0], gt_step1[mask>0])
+                blur_loss=criterion(pred_blur[mask>0], (blur/args.blurclip)[mask>0])
             loss=depth_loss+blur_loss*args.blurweight
-            # print('blur gt:'+str(torch.mean(gt_step1)))
-            # print('blur pred:'+str(torch.mean(output_step1)))
-            # print('blur loss:'+str(blur_loss))
-            # print('____')
-
-            absloss=torch.sum(torch.abs(output_step1-gt_step1)[mask>0])/torch.sum(mask)
+      
+            absloss=torch.sum(torch.abs(pred_blur-blur)[mask>0])/torch.sum(mask)
             absloss_sum+=absloss.item()
 
             loss.backward()
-            nn.utils.clip_grad_norm_(model_info['model'].parameters(), max_norm=2.0, norm_type=2)
+            nn.utils.clip_grad_norm_(model.parameters(), max_norm=2.0, norm_type=2)
             # gradient=0
             # n=0
             # for p in optimizer.param_groups[0]['params']:
@@ -202,79 +336,27 @@ def train_model(loaders, model_info):
             depthloss_sum+=depth_loss.item()
 
             if (st_iter + 1) % 10 == 0:
-                print(model_info['model_name'], 'Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'
-                      .format(epoch_iter + 1, TRAIN_PARAMS['EPOCHS_NUM'], st_iter + 1, model_info['total_steps'], loss_sum / iter_count))
+                print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'
+                      .format(epoch_iter + 1, args.epochs, st_iter + 1, total_steps, loss_sum / iter_count))
     
                 absloss_sum=0
                 depth_sum,blur_sum=0,0
                 depthloss_sum,blurloss_sum=0,0
 
-                total_iter = model_info['total_steps'] * epoch_iter + st_iter
+                total_iter = total_steps * epoch_iter + st_iter
                 loss_sum, iter_count = 0,0
 
         # Save model
         if (epoch_iter+1) % 10 == 0:
             print('saving model')
-            torch.save(model_info['model'].state_dict(), model_info['model_dir'] + model_info['model_name'] + '_ep' + str(0) + '.pth')
-            s2loss1,s2loss2,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(loaders[1],model_info,dataset=args.dataset,camind=args.camind,
-            depthscale=args.depthscale,fscale=args.fscale,s2limits=args.s2limits,aif=args.aif)
-            print('s2 loss2: '+str(s2loss2))
+            torch.save(model.state_dict(), args.savepath + '_ep' + str(0) + '.pth')
+            depthMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=eval(loaders[1])
+            print('s2 loss2: '+str(depthMSE))
             print('blur loss = '+str(blurloss))
             print('mean blur = '+str(meanblur))
 
 def main():
-    # Initial preparations
-    model_dir, model_name = util_func.set_output_folders(OUTPUT_PARAMS, TRAIN_PARAMS)
-    device_comp = util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
-
-    # Training initializations
-    if(args.dataset=='blender'):
-        loaders, total_steps = focalblender.load_data(args.datapath,blur=1,aif=args.aif,train_split=0.8,fstack=0,WORKERS_NUM=0,
-        BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,
-        blurclip=args.blurclip,dataset=args.dataset)
-    elif(args.dataset=='defocusnet'):
-        loaders, total_steps = focalblender.load_data(args.datapath,blur=1,aif=args.aif,train_split=0.8,fstack=0,WORKERS_NUM=0,
-        BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,
-        blurclip=args.blurclip,dataset=args.dataset)
-    elif(args.dataset=='nyu'):
-        rgbpath=args.datapath+"refocused1\\"
-        depthpath=args.datapath+"depth\\"
-        kcampath=args.datapath+"refocused1\\camparam.txt"
-        loaders, total_steps = NUY_blurred.load_data(rgbpath=rgbpath,depthpath=depthpath,blur=1,train_split=0.8,fstack=0,WORKERS_NUM=0,
-                BATCH_SIZE=20,MAX_DPT=1,blurclip=args.blurclip,kcampath=kcampath)
-
-    model, inp_ch_num, out_ch_num = util_func.load_model(TRAIN_PARAMS)
-    model = model.to(device=device_comp)
-    model_params = model.parameters()
-
-    # loading weights of the first step
-    if args.savedmodel:
-        print('loading model....')
-        print('model path :'+args.savedmodel)
-        pretrained_dict = torch.load(args.savedmodel)
-        model_dict = model.state_dict()
-        for param_tensor in model_dict:
-            for param_pre in pretrained_dict:
-                if param_tensor == param_pre:
-                    model_dict.update({param_tensor: pretrained_dict[param_pre]})
-        model.load_state_dict(model_dict)
-
-    if TRAIN_PARAMS['MODEL2_TRAIN_STEP'] == 2:
-        model_params += list(model.parameters())
-
-    model_info = {'model': model,
-                  'model_dir': model_dir,
-                  'model_name': model_name,
-                  'total_steps': total_steps,
-                  'inp_ch_num': inp_ch_num,
-                  'out_ch_num':out_ch_num,
-                  'device_comp': device_comp,
-                  'model_params': model_params,
-                  }
-    print("inp_ch_num",inp_ch_num,"   out_ch_num",out_ch_num)
-
-    # Run training
-    train_model(loaders=loaders, model_info=model_info)
+    train_model(loaders[0])
 
 if __name__ == "__main__":
     main()
