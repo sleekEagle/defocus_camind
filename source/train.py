@@ -17,6 +17,7 @@ import argparse
 from dataloaders import DDFF12,focalblender,NUY_blurred
 from arch import dofNet_arch3
 import sys
+import os
 
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
@@ -25,25 +26,29 @@ parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datase
 parser.add_argument('--bs', type=int,default=20, help='training batch size')
 parser.add_argument('--epochs', type=int,default=1000, help='training batch size')
 parser.add_argument('--depthscale', default=15.,help='divide all depths by this value')
-parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
 parser.add_argument('--blurclip', default=6.5,help='Clip blur by this value : only applicable for camind model. Default=10')
 parser.add_argument('--blurweight', default=1.0,help='weight for blur loss')
 parser.add_argument('--savepath', default='C:\\Users\\lahir\\code\\defocus\\models\\', help='path to the saved model')
-parser.add_argument('--checkpt', default=None, help='path to the saved model')
-parser.add_argument('--s2limits', nargs='+', default=[0.1,1.8],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--checkpt', default='C:\\Users\\lahir\\code\\defocus\\models\\camind_defocusnet_15.0_blurclip6.5_blurweight1.0\\model.pth', help='path to the saved model')
+# parser.add_argument('--checkpt', default=None, help='path to the saved model')
+parser.add_argument('--s2limits', nargs='+', default=[0.1,1.5],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--dataset', default='defocusnet', help='blender data path')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
-parser.add_argument('--lr', default=0.0001,help='dilvide all depths by this value')
+parser.add_argument('--out_depth', type=bool,default=False, help='True: use camera independent model. False: use defocusnet model')
+parser.add_argument('--lr', default=0.000001,help='dilvide all depths by this value')
 args = parser.parse_args()
 
-if(args.aif):
+if(args.aif):   
     expname='aif_defnetdata_'+str(args.depthscale)
 else:
     if(args.camind):
-        expname='camind_'+str(args.dataset)+'_'+str(args.depthscale)+'_f'+str(args.fscale)+'_blurclip'+str(args.blurclip)+'_blurweight'+str(args.blurweight)
+        expname='camind_'+str(args.dataset)+'_'+str(args.depthscale)+'_blurclip'+str(args.blurclip)+'_blurweight'+str(args.blurweight)
     else:
-        expname='nocamind_'+str(args.dataset)+'_'+str(args.depthscale)+'_f'+str(args.fscale)
+        expname='nocamind_'+str(args.dataset)+'_'+str(args.depthscale)+'_blurclip'+str(args.blurclip)+'_blurweight'+str(args.blurweight)
+#create directory to save model
+if not os.path.exists(args.savepath +expname):
+    os.makedirs(args.savepath +expname)
 
 '''
 load model
@@ -79,8 +84,8 @@ if(args.dataset=='blender'):
     blurclip=args.blurclip,dataset=args.dataset)
 elif(args.dataset=='defocusnet'):
     loaders, total_steps = focalblender.load_data(args.datapath,blur=1,aif=0,train_split=0.8,fstack=0,WORKERS_NUM=0,
-    BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=args.blurclip,dataset=args.dataset,
-    out_depth=False)
+    BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=1.0,dataset=args.dataset,
+    out_depth=args.out_depth)
 elif(args.dataset=='nyu'):
     rgbpath=args.datapath+"refocused1\\"
     depthpath=args.datapath+"depth\\"
@@ -93,8 +98,17 @@ elif(args.dataset=='nyu'):
 torch.manual_seed(2023)
 torch.cuda.manual_seed(2023)
 
+NORM_MIN=0.05
+NORM_MAX=15.0
+def normalize(x):
+    v=(x-NORM_MIN)/(NORM_MAX-NORM_MIN)
+    return v
+def denormalize(v):
+    x=v*(NORM_MAX-NORM_MIN)+NORM_MIN
+    return x
+
 def eval(loader,kcam=0,f=0,calc_distmse=False,out_depth=False):
-    meanMSE,meanblurmse,meanblur=0,0,0
+    meanMSE,meanMSE2,meanblurmse,meanblur=0,0,0,0
     minblur,maxblur,gt_meanblur=100,0,0
     #store distance wise mse
     distmse,distsum,distblur=torch.zeros(100),torch.zeros(100),torch.zeros(100)
@@ -162,7 +176,7 @@ def eval(loader,kcam=0,f=0,calc_distmse=False,out_depth=False):
         X2_fcs = X2_fcs.float().to(device_comp)
         s1_fcs = s1_fcs.float().to(device_comp)
         
-        pred_depth,pred_blur,corrected_blur=model(X,camind=args.camind,camparam=X2_fcs,foc_dist=s1_fcs)
+        pred_depth,pred_blur,corrected_blur=model(X,camind=args.camind,camparam=X2_fcs)
         
         #gt_blur=torch.cat((gt_blur,torch.flatten(gt_step1.detach().cpu())))
         #pred_blur=torch.cat((pred_blur,torch.flatten(output_step1.detach().cpu())))
@@ -174,7 +188,7 @@ def eval(loader,kcam=0,f=0,calc_distmse=False,out_depth=False):
         if(maxblur_>maxblur):
             maxblur=maxblur_
 
-        #output_step1=output_step1*(0.1-2.9e-3)*7
+        #output_step1=output_step1*(0.1-2.9e-3)*7 
         blurpred=pred_blur
         #calculate s2 provided that s2>s1
         s2est=0.1*1./(1-blurpred)
@@ -183,11 +197,14 @@ def eval(loader,kcam=0,f=0,calc_distmse=False,out_depth=False):
             blurmse=torch.mean(torch.square(pred_blur*args.blurclip-blur)[mask>0]).item()
             meanblurmse+=blurmse
         #calculate MSE value
-        if(out_depth):
-            mse=torch.mean(torch.square(pred_depth-depth)[mask>0]).item()
+        denorm_depth=denormalize(pred_depth)
+        if(args.out_depth):
+            mse=torch.mean(torch.square(denorm_depth-depth)[mask>0]).item()
         else:
-            mse=torch.mean(torch.square(focus_distance/(pred_depth*args.depthscale)-focus_distance/depth)[mask>0]).item()
+            mse=torch.mean(torch.square(focus_distance/denorm_depth-focus_distance/depth)[mask>0]).item()
+            mse2=torch.mean(torch.square(denorm_depth-depth)[mask>0]).item()
         meanMSE+=mse
+        meanMSE2+=mse2
 
         if(calc_distmse):
             squareder=torch.square(depth*args.depthscale-gt_step2)
@@ -222,7 +239,7 @@ def eval(loader,kcam=0,f=0,calc_distmse=False,out_depth=False):
         for i,v in enumerate(values):
             print("%4.3f"%(mse_[i].item()),end=",")
         print('')
-    return meanMSE/len(loader),meanblurmse/len(loader),meanblur/len(loader),gt_meanblur/len(loader),minblur,maxblur
+    return meanMSE/len(loader), meanMSE2/len(loader),meanblurmse/len(loader),meanblur/len(loader),gt_meanblur/len(loader),minblur,maxblur
 
 def train_model(loader):
     criterion = torch.nn.MSELoss()
@@ -300,18 +317,18 @@ def train_model(loader):
             s1_fcs = s1_fcs.float().to(device_comp)
 
             # Forward and compute loss
-            pred_depth,pred_blur,_=model(X,camind=args.camind,camparam=X2_fcs,foc_dist=s1_fcs)
-           
-            blur_sum+=torch.sum(pred_blur[mask>0]).item()/torch.sum(mask)
+            pred_depth,pred_blur,_=model(X,camind=args.camind,camparam=X2_fcs)
 
-            depth_loss=criterion(pred_depth[mask>0], (depth/args.depthscale)[mask>0])
+            blur_sum+=torch.sum(pred_blur[mask>0]).item()/torch.sum(mask)
+            norm_depth=normalize(depth)
+            depth_loss=criterion(pred_depth[mask>0], (norm_depth)[mask>0])
             #we don't train blur if input images are AiF
             if(args.aif):
                 blur_loss=0 
             else:
                 blur_loss=criterion(pred_blur[mask>0], (blur/args.blurclip)[mask>0])
             loss=depth_loss+blur_loss*args.blurweight
-      
+
             absloss=torch.sum(torch.abs(pred_blur-blur)[mask>0])/torch.sum(mask)
             absloss_sum+=absloss.item()
 
@@ -349,9 +366,10 @@ def train_model(loader):
         # Save model
         if (epoch_iter+1) % 10 == 0:
             print('saving model')
-            torch.save(model.state_dict(), args.savepath + '_ep' + str(0) + '.pth')
-            depthMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=eval(loaders[1])
-            print('s2 loss2: '+str(depthMSE))
+            torch.save(model.state_dict(), args.savepath +expname+ '\\model.pth')
+            depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=eval(loaders[1])
+            print('depth MSE: '+str(depthMSE))
+            print('s1/depth MSE: '+str(valueMSE))
             print('blur loss = '+str(blurloss))
             print('mean blur = '+str(meanblur))
 

@@ -142,7 +142,7 @@ class ImageDataset(torch.utils.data.Dataset):
         self.imglist_dpt = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "Dpt.exr"]
         self.imglist_allif = [f for f in listdir(root_dir) if isfile(join(root_dir, f)) and f[-7:] == "Aif.tif"]
 
-        print("Total number of samples", len(self.imglist_dpt), "  Total number of seqs", len(self.imglist_dpt) / self.img_num)
+        print("Total number of focal stacks", len(self.imglist_dpt))
 
         self.imglist_all.sort()
         self.imglist_dpt.sort()
@@ -264,7 +264,7 @@ def load_data(data_dir, blur,aif,train_split,fstack,
     return [loader_train, loader_valid], total_steps
 
 
-datapath='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\'
+# datapath='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\'
 # datapath='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\'
 # # datapath='C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\focal_data\\'
 # blurclip=1
