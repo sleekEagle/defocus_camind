@@ -1,17 +1,13 @@
 import torch
-import torch.nn as nn
 import torch.utils.data
-from torchvision import transforms, utils
+from torchvision import transforms
 
-from os import listdir, mkdir
+from os import listdir
 from os.path import isfile, join, isdir
-from visdom import Visdom
 import numpy as np
 import random
 import OpenEXR
 from PIL import Image
-from skimage import img_as_float
-import matplotlib.pyplot as plt
 
 #read kcams.txt file
 def read_kcamfile(file):
