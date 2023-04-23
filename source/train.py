@@ -4,17 +4,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
-from torchvision import transforms, utils
-
 import numpy as np
-import importlib
-import random
 import math
-from sacred import Experiment
-import csv
-import util_func
 import argparse
-from dataloaders import DDFF12,focalblender,NUY_blurred
+from dataloaders import focalblender,NUY_blurred
 from arch import dofNet_arch3
 import sys
 import os
@@ -36,7 +29,7 @@ parser.add_argument('--dataset', default='defocusnet', help='blender data path')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
 parser.add_argument('--out_depth', type=bool,default=False, help='True: use camera independent model. False: use defocusnet model')
-parser.add_argument('--lr', default=0.000001,help='dilvide all depths by this value')
+parser.add_argument('--lr', default=0.00001,help='dilvide all depths by this value')
 args = parser.parse_args()
 
 if(args.aif):   

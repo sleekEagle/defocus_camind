@@ -1,16 +1,10 @@
 import torch
-import torch.nn as nn
 import torch.utils.data
-from torchvision import transforms, utils
+from torchvision import transforms
 
-from os import listdir, mkdir
-from os.path import isfile, join, isdir
-from visdom import Visdom
+from os import listdir
+from os.path import isfile, join
 import numpy as np
-import random
-import OpenEXR
-from PIL import Image
-from skimage import img_as_float
 import matplotlib.pyplot as plt
 import cv2
 import torchvision.transforms.functional as F
@@ -39,20 +33,8 @@ def read_kcamfile(file):
             except:
                  d[key] = val
     return d
-
-
-# reading depth files
-def read_dpt(img_dpt_path): 
-    dpt_img = OpenEXR.InputFile(img_dpt_path)
-    dw = dpt_img.header()['dataWindow']
-    size = (dw.max.x - dw.min.x + 1, dw.max.y - dw.min.y + 1)
-    (r, g, b) = dpt_img.channels("RGB")
-    dpt = np.fromstring(r, dtype=np.float16)
-    dpt.shape = (size[1], size[0])
-    return dpt
-
-# to calculate circle of confusion
 '''
+# to calculate circle of confusion
 output |s2-s1|/s2
 '''
 def get_blur(s1,s2,f,kcam):
