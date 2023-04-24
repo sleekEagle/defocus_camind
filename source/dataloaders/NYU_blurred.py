@@ -75,7 +75,8 @@ blur1,blur2... corresponds to the focal stack
 class ImageDataset(torch.utils.data.Dataset):
     """Focal place dataset."""
 
-    def __init__(self, rgbpath,depthpath, transform_fnc=None,blur=1,aif=0,fstack=0, max_dpt = 3.,blurclip=10.,kcampath=None):
+    def __init__(self, rgbpath,depthpath, transform_fnc=None,blur=1,aif=0,fstack=0, max_dpt=1.,blurclip=1.,kcampath=None,
+                 out_depth=False):
 
         self.rgbpath=rgbpath
         self.depthpath=depthpath
@@ -87,6 +88,7 @@ class ImageDataset(torch.utils.data.Dataset):
         self.fstack=fstack
         self.blurclip=blurclip
         self.kcampath=kcampath
+        self.out_depth=out_depth
         if(kcampath):
             self.kcamdict=read_kcamfile(kcampath)
             #calculate kcam based on parameters in file
@@ -126,7 +128,8 @@ class ImageDataset(torch.utils.data.Dataset):
         #mat_dpt_scaled = img_dpt_scaled / 1.9
         mat_dpt_scaled = img_dpt/self.max_dpt
         mat_dpt = mat_dpt_scaled.copy()[:, :, np.newaxis]
-        mat_dpt = self.s1/mat_dpt
+        if(not self.out_depth):
+            mat_dpt = mat_dpt/self.s1
 
         #read rgb image
         im = cv2.imread(self.rgbpath + self.imglist_rgb[idx],cv2.IMREAD_UNCHANGED)
@@ -159,7 +162,7 @@ class Transform(object):
 
 
 def load_data(rgbpath,depthpath, blur,train_split,fstack,
-              WORKERS_NUM, BATCH_SIZE, MAX_DPT,blurclip=10.0,kcampath=None):
+              WORKERS_NUM, BATCH_SIZE, MAX_DPT=1.,blurclip=1.,kcampath=None,out_depth=False):
     tr=transforms.Compose([
         Transform(),
         transforms.RandomCrop((256,256)),
@@ -168,7 +171,7 @@ def load_data(rgbpath,depthpath, blur,train_split,fstack,
         ])
     img_dataset = ImageDataset(rgbpath=rgbpath,depthpath=depthpath,blur=blur,transform_fnc=tr,
                                fstack=fstack, max_dpt=MAX_DPT,
-                               blurclip=blurclip,kcampath=kcampath)
+                               blurclip=blurclip,kcampath=kcampath,out_depth=out_depth)
 
     indices = list(range(len(img_dataset)))
     split = int(len(img_dataset) * train_split)
@@ -190,9 +193,15 @@ def load_data(rgbpath,depthpath, blur,train_split,fstack,
     return [loader_train, loader_valid], total_steps
 
 
-# depthpath='C:\\Users\\lahir\\data\\nuy_depth\\depth\\'
-# rgbpath='C:\\Users\\lahir\\data\\nuy_depth\\refocused5\\'
-# kcampath='C:\\Users\\lahir\\data\\nuy_depth\\refocused5\\camparam.txt'
+# depthpath='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\'
+# # rgbpath='C:\\Users\\lahir\\data\\nuy_depth\\refocused5\\'
+# # kcampath='C:\\Users\\lahir\\data\\nuy_depth\\refocused5\\camparam.txt'
+# rgbpath=depthpath+"refocused1\\"
+# depthpath=depthpath+"depth\\"
+# kcampath=depthpath+"refocused1\\camparam.txt"
+# loaders, total_steps=load_data(rgbpath=rgbpath,depthpath=depthpath,blur=1,train_split=0.8,fstack=0,WORKERS_NUM=0,
+#         BATCH_SIZE=1,MAX_DPT=1,blurclip=1,kcampath=kcampath)
+
 # blurclip=1
 # loaders, total_steps = load_data(rgbpath=rgbpath,depthpath=depthpath,blur=1,train_split=0.8,fstack=0,WORKERS_NUM=0,
 #         BATCH_SIZE=1,MAX_DPT=1.0,blurclip=blurclip,kcampath=kcampath)
@@ -238,19 +247,20 @@ def get_data_stats(blurclip):
     depthpath='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\depth\\'
     rgbpath='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\refocused1\\'
     kcampath='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\refocused1\\camparam.txt'
-    blurclip=1
     loaders, total_steps = load_data(rgbpath=rgbpath,depthpath=depthpath,blur=1,train_split=0.8,fstack=0,WORKERS_NUM=0,
-        BATCH_SIZE=1,MAX_DPT=1.0,blurclip=blurclip,kcampath=kcampath)
+        BATCH_SIZE=1,MAX_DPT=1.0,blurclip=1,kcampath=kcampath,out_depth=True)
     print('stats of train data')
     depthlist=get_loader_stats(loaders[0])
     #plot histogram of GT depths
     depthlist=depthlist.numpy()
     _ = plt.hist(depthlist, bins='auto') 
+    plt.title('Depth stats of NYU dataset. min='+str(min(depthlist))+' max='+str(max(depthlist))+' mean='+str(np.mean(depthlist)))
     plt.show()
     print('______')
 
 #data statistics of the input images
 def get_loader_stats(loader):
+    print('getting NUY stats...')
     xmin,xmax,xmean,count=100,0,0,0
     depthmin,depthmax,depthmean=100,0,0
     blurmin,blurmax,blurmean=100,0,0
@@ -303,6 +313,8 @@ def get_loader_stats(loader):
     print('blur max='+str(blurmax))
     print('blur mean='+str(blurmean/count))
     return depthlist
+
+# get_data_stats(1)
 
 '''
 blur_thres=7.0

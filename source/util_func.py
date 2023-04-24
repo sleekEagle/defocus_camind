@@ -231,8 +231,17 @@ def forward_pass(X, model_info,stacknum=1,camind=True,flag_step2=True,camparam=0
     else:
         return outputs
 
-def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,kcam=0,f=0,aif=False,calc_distmse=False,out_depth=False):
-    meanMSE,meanblurmse,meanblur=0,0,0
+NORM_MIN=0.066
+NORM_MAX=28.0
+def normalize(x):
+    v=(x-NORM_MIN)/(NORM_MAX-NORM_MIN)
+    return v
+def denormalize(v):
+    x=v*(NORM_MAX-NORM_MIN)+NORM_MIN
+    return x
+
+def eval(model,loader,args,device_comp,kcam=0,f=0,calc_distmse=False):
+    meanMSE,meanMSE2,meanblurmse,meanblur=0,0,0,0
     minblur,maxblur,gt_meanblur=100,0,0
     #store distance wise mse
     distmse,distsum,distblur=torch.zeros(100),torch.zeros(100),torch.zeros(100)
@@ -245,33 +254,33 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
         sys.stdout.write("\r%d is done"%st_iter)
         sys.stdout.flush()
 
-        if(dataset=='ddff'):
+        if(args.dataset=='ddff'):
             img_stack, gt_disp, foc_dist=sample_batch
-            X=img_stack.float().to(model_info['device_comp'])
-            Y=gt_disp.float().to(model_info['device_comp'])
+            X=img_stack.float().to(device_comp)
+            Y=gt_disp.float().to(device_comp)
             gt_step2=Y
-        elif(dataset=='blender' or dataset=='defocusnet'):
+        elif(args.dataset=='blender' or args.dataset=='defocusnet'):
             # Setting up input and output data
-            X = sample_batch['input'][:,0,:,:,:].float().to(model_info['device_comp'])
-            depth=sample_batch['depth'].float().to(model_info['device_comp'])
-            blur=sample_batch['blur'].float().to(model_info['device_comp'])
+            X = sample_batch['input'][:,0,:,:,:].float().to(device_comp)
+            depth=sample_batch['depth'].float().to(device_comp)
+            blur=sample_batch['blur'].float().to(device_comp)
             focus_distance=sample_batch['fdist']
             focus_distance=torch.unsqueeze(focus_distance,dim=2).unsqueeze(dim=3)
             focus_distance=torch.repeat_interleave(focus_distance,depth.shape[2],dim=2).repeat_interleave(depth.shape[3],dim=3)
-            focus_distance=focus_distance.to(model_info['device_comp'])
-        elif(dataset=="nyu"):
-            X=sample_batch['rgb'].float().to(model_info['device_comp'])
-            depth=sample_batch['depth'].float().to(model_info['device_comp'])
-            blur=sample_batch['blur'].float().to(model_info['device_comp'])
+            focus_distance=focus_distance.to(device_comp)
+        elif(args.dataset=="nyu"):
+            X=sample_batch['rgb'].float().to(device_comp)
+            depth=sample_batch['depth'].float().to(device_comp)
+            blur=sample_batch['blur'].float().to(device_comp)
             depth=torch.unsqueeze(depth,dim=1)
             depth=torch.unsqueeze(depth,dim=1)
             focus_distance=sample_batch['fdist']
             focus_distance=torch.unsqueeze(focus_distance,dim=2).unsqueeze(dim=3)
             focus_distance=torch.repeat_interleave(focus_distance,depth.shape[2],dim=2).repeat_interleave(depth.shape[3],dim=3)
-            focus_distance=focus_distance.to(model_info['device_comp'])
+            focus_distance=focus_distance.to(device_comp)
 
-        if(len(s2limits)==2):
-            mask=(focus_distance/depth>s2limits[0])*(focus_distance/depth<s2limits[1])
+        if(len(args.s2limits)==2):
+            mask=(depth*focus_distance>args.s2limits[0])*(depth*focus_distance<args.s2limits[1])
             s=torch.sum(mask).item()
             #continue loop if there are no ground truth data in the range we are interested in
             if(s==0):
@@ -281,29 +290,26 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
         
         stacknum = 1
         X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
-        s1_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
         for t in range(stacknum):
             #iterate through the batch
             for i in range(X.shape[0]):
-                if(dataset=='blender'or dataset=='defocusnet' or dataset=='nyu'):
+                if(args.dataset=='blender'or args.dataset=='defocusnet' or args.dataset=='nyu'):
                     fd=sample_batch['fdist'][i].item()
                     f=sample_batch['f'][i].item()
                     k=sample_batch['kcam'][i].item()
-                    if(not aif):
+                    # print('kcam:'+str(k))
+                    # print('f:'+str(f))
+                    # print('fd:'+str(fd))
+                    if(not args.aif):
                         X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*k*(fd-f)
-                elif(dataset=='ddff'):
+                elif(args.dataset=='ddff'):
                     fd=foc_dist[i].item()
-                    if(not aif):
+                    if(not args.aif):
                         X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*kcam*(fd-f)
-                # if(not aif):
-                #     s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/3.0
-        X2_fcs = X2_fcs.float().to(model_info['device_comp'])
-        s1_fcs = s1_fcs.float().to(model_info['device_comp'])
-        if(aif):
-            pred_blur,pred_depth = forward_pass(X,model_info,stacknum=stacknum,camind=camind,camparam=X2_fcs,foc_dist=s1_fcs,aif=aif)
-        else:
-            pred_blur,pred_depth,corrected_blur = forward_pass(X,model_info,stacknum=stacknum,camind=camind,camparam=X2_fcs,foc_dist=s1_fcs,aif=aif)
-
+        X2_fcs = X2_fcs.float().to(device_comp)
+        
+        pred_depth,pred_blur,corrected_blur=model(X,camind=args.camind,camparam=X2_fcs)
+        
         #gt_blur=torch.cat((gt_blur,torch.flatten(gt_step1.detach().cpu())))
         #pred_blur=torch.cat((pred_blur,torch.flatten(output_step1.detach().cpu())))
 
@@ -314,24 +320,37 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
         if(maxblur_>maxblur):
             maxblur=maxblur_
 
-        #output_step1=output_step1*(0.1-2.9e-3)*7
+        #output_step1=output_step1*(0.1-2.9e-3)*7 
         blurpred=pred_blur
         #calculate s2 provided that s2>s1
         s2est=0.1*1./(1-blurpred)
         #blur mse
-        if(dataset=='blender' or dataset=='defocusnet'):
-            blurmse=torch.mean(torch.square(pred_blur-blur)[mask>0]).item()
+        if(args.dataset=='blender' or args.dataset=='defocusnet' or args.dataset=='nyu'):
+            if(args.dataset=='nyu'):
+                blur_=torch.unsqueeze(blur,dim=0)
+                mask_=torch.squeeze(mask,dim=0)
+            else:
+                blur_=blur
+                mask_=mask
+            blurmse=torch.mean(torch.square(pred_blur*args.blurclip-blur_)[mask_>0]).item()
             meanblurmse+=blurmse
         #calculate MSE value
-        if(out_depth):
-            mse=torch.mean(torch.square(pred_depth*depthscale-depth)[mask>0]).item()
+        denorm_depth=denormalize(pred_depth)
+        if(args.out_depth):
+            mse=torch.mean(torch.square(denorm_depth-depth)[mask>0]).item()
         else:
-            mse=torch.mean(torch.square(focus_distance/(pred_depth*15.0)-focus_distance/depth)[mask>0]).item()
+            mse=torch.mean(torch.square(focus_distance*pred_depth-focus_distance*depth)[mask>0]).item()
+            mse2=torch.mean(torch.square(pred_depth-depth)[mask>0]).item()
         meanMSE+=mse
+        meanMSE2+=mse2
 
         if(calc_distmse):
-            squareder=torch.square(depth*depthscale-gt_step2)
-            gtround=torch.round(gt_step2*10,decimals=0)
+            if(args.dataset=='nyu'):
+                depth=torch.squeeze(depth,dim=0)
+                pred_depth=torch.squeeze(pred_depth,dim=0)
+            squareder=torch.square(pred_depth*focus_distance-depth*focus_distance)
+            gtround=torch.round(depth*focus_distance*10,decimals=0)
+            
             for i in range(1,len(distmse)+1):
                 selected_val=squareder[gtround==i]
                 selected_blur=corrected_blur[gtround==i]
@@ -345,16 +364,17 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
 
         blur=torch.sum(pred_blur*mask).item()/torch.sum(mask).item()
         meanblur+=blur
-        if(dataset=='blender' or dataset=='defocusnet'):
+        if(args.dataset=='blender' or args.dataset=='defocusnet'):
             gtblur=torch.sum(blur*mask).item()/torch.sum(mask).item()
             gt_meanblur+=gtblur
     if(calc_distmse):
         print('\ndistance wise error (distances rounded to the shown value): ')
         mse_=distmse/distsum
         blur_=distblur/distsum
-        mse_=mse_[~torch.isnan(mse_)]
-        blur_=blur_[~torch.isnan(blur_)]
+        # mse_=mse_[~torch.isnan(mse_)]
+        # blur_=blur_[~torch.isnan(blur_)]
         values=np.arange(0.1,(len(mse_)+1)*0.1,0.1)
+        values=values[:-1]
         print('distances:')
         for i,v in enumerate(values):
             print("%4.3f"%(v),end=",")
@@ -362,21 +382,21 @@ def eval(loader,model_info,depthscale,fscale,s2limits,camind=True,dataset=None,k
         for i,v in enumerate(values):
             print("%4.3f"%(mse_[i].item()),end=",")
         print('')
-    return meanMSE/len(loader),meanblurmse/len(loader),meanblur/len(loader),gt_meanblur/len(loader),minblur,maxblur
+    return meanMSE/len(loader), meanMSE2/len(loader),meanblurmse/len(loader),meanblur/len(loader),gt_meanblur/len(loader),minblur,maxblur
 
-def kcamwise_blur(loader,model_info,depthscale,fscale,s2limits,camind,aif):
-    print('iscamind:'+str(camind))
+def kcamwise_blur(model,loader,args,device_comp):
+    print('iscamind:'+str(args.camind))
     means2mse1,means2mse2,meanblurmse,meanblur,meanblur_corrected=0,0,0,0,0
     kcams_all,meanblur_all,meanblur_corrected_all,mse_all=torch.empty(0),torch.empty(0),torch.empty(0),torch.empty(0)
     for st_iter, sample_batch in enumerate(loader):
-        X = sample_batch['input'][:,0,:,:,:].float().to(model_info['device_comp'])
-        Y = sample_batch['output'].float().to(model_info['device_comp'])
+        X = sample_batch['input'][:,0,:,:,:].float().to(device_comp)
+        Y = sample_batch['output'].float().to(device_comp)
         gt_step1 = Y[:, :-1, :, :]
         gt_step2 = Y[:, -1:, :, :]
         stacknum = 1
 
-        if(len(s2limits)==2):
-            mask=(gt_step2>s2limits[0]).int()*(gt_step2<s2limits[1]).int()
+        if(len(args.s2limits)==2):
+            mask=(gt_step2>args.s2limits[0]).int()*(gt_step2<args.s2limits[1]).int()
             s=torch.sum(mask).item()
             if(s==0):
                 continue
@@ -394,28 +414,23 @@ def kcamwise_blur(loader,model_info,depthscale,fscale,s2limits,camind,aif):
                 focus_distance=sample_batch['fdist'][i].item()
                 f=sample_batch['f'].item()
                 #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/fscale*(sample_batch['kcam'][i].item())/1.4398 * 0.9**(sample_batch['kcam'][i].item())
-                if(not aif):
+                if(not args.aif):
                     X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*sample_batch['kcam'][i].item()*(focus_distance-f)/fscale
                 #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*(focus_distance-sample_batch['f'][i].item())/fscale*1
                 #X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*sample_batch['kcam'][i].item()/1.4398*(0.9**(sample_batch['kcam'][i].item()))
-                if(not aif):
-                    s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/fscale
-        X2_fcs = X2_fcs.float().to(model_info['device_comp'])
-        s1_fcs = s1_fcs.float().to(model_info['device_comp'])
+                if(not args.aif):
+                    s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/args.fscale
+        X2_fcs = X2_fcs.float().to(device_comp)
+        s1_fcs = s1_fcs.float().to(device_comp)
 
-        if(aif):
-            output_step1,output_step2 = forward_pass(X,model_info,stacknum=stacknum,camind=camind,camparam=X2_fcs,foc_dist=s1_fcs,aif=aif)
-            mul=output_step1
-        else:
-            output_step1,output_step2,mul = forward_pass(X,model_info,stacknum=stacknum,camind=camind,camparam=X2_fcs,foc_dist=s1_fcs,aif=aif)
-
+        output_step2,output_step1,mul=model(X,camind=args.camind,camparam=X2_fcs)
 
         meanblur=torch.mean(output_step1*mask,dim=2).mean(dim=2)[:,0].detach().cpu()
         meanblur_corrected=torch.mean(mul*mask,dim=2).mean(dim=2)[:,0].detach().cpu()
         meanblur_corrected_all=torch.cat((meanblur_corrected_all,meanblur_corrected))
 
         meanblur_all=torch.cat((meanblur_all,meanblur))
-        mse=torch.sum(torch.square((output_step2*depthscale-gt_step2)*mask),dim=2).sum(dim=2)[:,0].detach().cpu()/torch.sum(mask,dim=2).sum(dim=2)[:,0].detach().cpu()
+        mse=torch.sum(torch.square((output_step2*args.depthscale-gt_step2)*mask),dim=2).sum(dim=2)[:,0].detach().cpu()/torch.sum(mask,dim=2).sum(dim=2)[:,0].detach().cpu()
         mse_all=torch.cat((mse_all,mse))
 
     labels=torch.zeros_like(kcams_all,dtype=torch.int64)
@@ -488,6 +503,12 @@ blur is calculated as
 blur=abs(s2-s1)/s2*1/(s1-f)*1/kcam*
 1/kcam=f^2/N*1/p*imgratio
 '''
+p=36e-6
+N=1.0
+s2range=[0.1,10]
+s1range=[1,10]
+f=50.0e-3
+blur_thres=6.9
 def get_workable_s1s2ranges(p,N,f,s2range,s1range,blur_thres,imgratio=1):
     s1list,s2list,blur=[],[],[]
     kcam=1/(f**2/N/p)

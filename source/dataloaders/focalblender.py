@@ -112,7 +112,7 @@ class ImageDataset(torch.utils.data.Dataset):
     """Focal place dataset."""
 
     def __init__(self, root_dir, transform_fnc=None,blur=1,aif=0,fstack=0,focus_dist=[0.1,.15,.3,0.7,1.5,100000],
-                req_f_indx=[0,2], max_dpt = 3.,blurclip=10.,kcampath=None,
+                req_f_indx=[0,2], max_dpt = 1.,blurclip=1.,kcampath=None,
                 dataset='blender',out_depth=False):
 
         self.root_dir = root_dir
@@ -173,7 +173,7 @@ class ImageDataset(torch.utils.data.Dataset):
         else:
             mat_dpt=np.zeros((256, 256, 0))
             for req in reqar:
-                dpt_=self.focus_dist[req]/img_dpt
+                dpt_=img_dpt/self.focus_dist[req]
                 dpt_=np.expand_dims(dpt_,axis=2)
                 mat_dpt=np.concatenate((mat_dpt,dpt_),axis=-1)
         
@@ -261,13 +261,13 @@ def load_data(data_dir, blur,aif,train_split,fstack,
 
 
 # datapath='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\'
-# datapath='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\'
+datapath='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\'
 # # datapath='C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\focal_data\\'
 # blurclip=1
 
-# loaders, total_steps = load_data(datapath,blur=1,aif=0,train_split=0.8,fstack=1,WORKERS_NUM=0,
-#         BATCH_SIZE=10,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=1,dataset='defocusnet',
-#         out_depth=False)
+loaders, total_steps = load_data(datapath,blur=1,aif=0,train_split=0.8,fstack=1,WORKERS_NUM=0,
+        BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=1,dataset='defocusnet',
+        out_depth=False)
 
 def get_data_stats(datapath,blurclip):
     loaders, total_steps = load_data(datapath,blur=1,aif=0,train_split=0.8,fstack=1,WORKERS_NUM=0,

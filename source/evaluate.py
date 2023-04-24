@@ -4,121 +4,116 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
 from torchvision import transforms, utils
+from arch import dofNet_arch3
 
 import numpy as np
 import importlib
 import util_func
 import argparse
-from dataloaders import DDFF12,focalblender
-
-
-
-TRAIN_PARAMS = {
-    'ARCH_NUM': 3,
-    'FILTER_NUM': 16,
-    'FLAG_GPU': True,
-    'TRAINING_MODE': 2, #1: do not use step 1 , 2: use step 2
-    'EPOCHS_NUM': 100, 'EPOCH_START': 0,
-
-    'MODEL_STEPS': 1,
-
-    'MODEL1_LOAD': False,
-    'MODEL1_ARCH_NUM': 1,
-    'MODEL1_NAME': "d06_t01", 'MODEL1_INPUT_NUM': 1,
-    'MODEL1_EPOCH': 0, 'MODEL1_FILTER_NUM': 16,
-    'MODEL1_LOSS_WEIGHT': 1.,
-}
-
-
-OUTPUT_PARAMS = {
-    'RESULT_PATH': 'C:\\Users\\lahir\\code\\defocus\\results\\',
-    'MODEL_PATH': 'C:\\Users\\lahir\\code\\defocus\\models\\a03_exp01\\a03_exp01_ep0.pth',
-    'EXP_NUM': 1,
-}
+from dataloaders import DDFF12,focalblender,NYU_blurred
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
-parser.add_argument('--blenderpth', default="C://Users//lahir//focalstacks//datasets//mediumN1-10_test_remapped//", help='blender data path')
-#parser.add_argument('--blenderpth', default="C:\\Users\\lahir\\focalstacks\\datasets\\medium_f_test\\", help='blender data path')
-#parser.add_argument('--blenderpth', default="C://Users//lahir//focalstacks//datasets//mediumN1//", help='blender data path')
-parser.add_argument('--kcamfile', default='kcams_est_DFV.txt', help='blender data path')
+# parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
+# parser.add_argument('--blenderpth', default="C:\\Users\\lahir\\focalstacks\\datasets\\medium_f_test\\", help='blender data path')
+# parser.add_argument('--datapath', default="C://Users//lahir//focalstacks//datasets//mediumN1//", help='blender data path')
+parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\', help='blender data path')
+parser.add_argument('--kcamfile', default=None, help='blender data path')
 parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
-parser.add_argument('--dataset', default='blender', help='blender data path')
+parser.add_argument('--dataset', default='nyu', help='blender data path')
 parser.add_argument('--bs', type=int,default=1, help='training batch size')
-parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')
-parser.add_argument('--fscale', default=1.9,help='divide all focal distances by this value')
-parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\defocus_trained\\camind.pth', help='path to the saved model')
+parser.add_argument('--depthscale', default=28.,help='divide all depths by this value')
+parser.add_argument('--blurclip', default=6.5,help='Clip blur by this value : only applicable for camind model. Default=10')
+parser.add_argument('--checkpt', default='C:\\Users\\lahir\\code\\defocus\\models\\camind_defocusnet_28.0_blurclip6.5_blurweight1.0\\model.pth', help='path to the saved model')
 #parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_norelu_N1_1.9_f1.9_blurclip8.0_blurweight1.0\\a03_expcamind_norelu_N1_1.9_f1.9_blurclip8.0_blurweight1.0_ep0.pth', help='path to the saved model')
 #parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a04_expaif_N1_d_1.9\\a04_expaif_N1_d_1.9_ep0.pth', help='path to the saved model')
 #parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3_ep0.pth', help='path to the saved model')
-parser.add_argument('--s2limits', nargs='+', default=[0.1,2.0],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--s2limits', nargs='+', default=[0.71,10.],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
+parser.add_argument('--out_depth', type=bool,default=False, help='True: use camera independent model. False: use defocusnet model')
+
 args = parser.parse_args()
 
-if(args.aif):
-    TRAIN_PARAMS['ARCH_NUM']=4
+'''
+load model
+'''
+#GPU or CPU
+device_comp = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+ch_inp_num = 3
+ch_out_num = 1
+model = dofNet_arch3.AENet(ch_inp_num, 1, 16, flag_step2=True)
+model = model.to(device_comp)
+model_params = model.parameters()
+
+# loading weights of the first step
+if args.checkpt:
+    print('loading model....')
+    print('model path :'+args.checkpt)
+    pretrained_dict = torch.load(args.checkpt)
+    model_dict = model.state_dict()
+    for param_tensor in model_dict:
+        for param_pre in pretrained_dict:
+            if param_tensor == param_pre:
+                model_dict.update({param_tensor: pretrained_dict[param_pre]})
+    model.load_state_dict(model_dict)
+
+
+ #load the required dataset
+if(args.dataset=='blender'):
+    print('eval blender')
+    if(args.kcamfile):
+        kcampath=args.blenderpth+args.kcamfile
+    else:
+        kcampath=None
+    loaders, total_steps = focalblender.load_data(args.datapath,blur=1,aif=0,train_split=1.0,fstack=0,WORKERS_NUM=0,
+    BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=1.0,dataset=args.dataset,
+    out_depth=args.out_depth)
+elif(args.dataset=='ddff'):
+    DDFF12_train = DDFF12.DDFF12Loader(args.ddffpth, stack_key="stack_train", disp_key="disp_train", n_stack=10,
+                                min_disp=0.02, max_disp=0.28,fstack=0,idx_req=[9])
+    DDFF12_val = DDFF12.DDFF12Loader(args.ddffpth, stack_key="stack_val", disp_key="disp_val", n_stack=10,
+                                        min_disp=0.02, max_disp=0.28, b_test=False,fstack=0,idx_req=[6,5,4,3,2,1,0])
+    DDFF12_train, DDFF12_val = [DDFF12_train], [DDFF12_val]
+
+    dataset_train = torch.utils.data.ConcatDataset(DDFF12_train)
+    dataset_val = torch.utils.data.ConcatDataset(DDFF12_val) # we use the model perform better on  DDFF12_val
+
+    TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=0, batch_size=1, shuffle=True, drop_last=True)
+    ValImgLoader = torch.utils.data.DataLoader(dataset=dataset_val, num_workers=0, batch_size=1, shuffle=False, drop_last=True)
+elif(args.dataset=='defocusnet'):
+    loaders, total_steps = focalblender.load_data(args.datapath,blur=1,aif=0,train_split=0.8,fstack=0,WORKERS_NUM=0,
+    BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=1.0,dataset=args.dataset,
+    out_depth=args.out_depth)
+elif(args.dataset=='nyu'):
+    print('Getting NUY data...')
+    rgbpath=args.datapath+"refocused1\\"
+    depthpath=args.datapath+"depth\\"
+    kcampath=args.datapath+"refocused1\\camparam.txt"
+    loaders, total_steps = NYU_blurred.load_data(rgbpath=rgbpath,depthpath=depthpath,blur=1,train_split=0.8,fstack=0,WORKERS_NUM=0,
+            BATCH_SIZE=args.bs,MAX_DPT=1,blurclip=1,kcampath=kcampath)
 
 def main():
-    device_comp = util_func.set_comp_device(TRAIN_PARAMS['FLAG_GPU'])
-    #load the required dataset
-    if(args.dataset=='blender'):
-        if(args.kcamfile):
-            kcampath=args.blenderpth+args.kcamfile
-        else:
-            kcampath=None
-        loaders, total_steps = focalblender.load_data(args.blenderpth,blur=1,aif=args.aif,train_split=1.0,fstack=0,WORKERS_NUM=0,
-        BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[4],MAX_DPT=1,kcampath=kcampath)
-    elif(args.dataset=='ddff'):
-        DDFF12_train = DDFF12.DDFF12Loader(args.ddffpth, stack_key="stack_train", disp_key="disp_train", n_stack=10,
-                                    min_disp=0.02, max_disp=0.28,fstack=0,idx_req=[9])
-        DDFF12_val = DDFF12.DDFF12Loader(args.ddffpth, stack_key="stack_val", disp_key="disp_val", n_stack=10,
-                                            min_disp=0.02, max_disp=0.28, b_test=False,fstack=0,idx_req=[6,5,4,3,2,1,0])
-        DDFF12_train, DDFF12_val = [DDFF12_train], [DDFF12_val]
-
-        dataset_train = torch.utils.data.ConcatDataset(DDFF12_train)
-        dataset_val = torch.utils.data.ConcatDataset(DDFF12_val) # we use the model perform better on  DDFF12_val
-
-        TrainImgLoader = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=0, batch_size=1, shuffle=True, drop_last=True)
-        ValImgLoader = torch.utils.data.DataLoader(dataset=dataset_val, num_workers=0, batch_size=1, shuffle=False, drop_last=True)
-
-
-    model, inp_ch_num, out_ch_num = util_func.load_model(TRAIN_PARAMS)
-    model = model.to(device=device_comp)
-    model_params = model.parameters()
- 
-    # loading weights of the first step
-    if args.savedmodel:
-        print('loading model....')
-        print('model path :'+args.savedmodel)
-        pretrained_dict = torch.load(args.savedmodel)
-        model_dict = model.state_dict()
-        for param_tensor in model_dict:
-            for param_pre in pretrained_dict:
-                if param_tensor == param_pre:
-                    model_dict.update({param_tensor: pretrained_dict[param_pre]})
-        model.load_state_dict(model_dict)
-
-    model_info = {'model': model,
-                    'inp_ch_num': inp_ch_num,
-                    'out_ch_num':out_ch_num,
-                    'device_comp': device_comp,
-                    'model_params': model_params,
-                    }
     if(args.dataset=='blender'):  
         print('evaluating on blender')         
-        s2loss1,s2loss2,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,
-        dataset=args.dataset,camind=args.camind,aif=args.aif,calc_distmse=True)
-        util_func.kcamwise_blur(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,camind=args.camind,aif=args.aif)
+        depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[0],args,device_comp,calc_distmse=True)
+        # util_func.kcamwise_blur(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,camind=args.camind,aif=args.aif)
+    elif(args.dataset=='defocusnet'):
+        depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[1],args,device_comp,calc_distmse=True)
     elif(args.dataset=='ddff'):
         print('DDFF dataset Evaluation')
         kcam=5.0
         for kcam in [0.1,0.5,0.8,11,12,13,14,15,16,17,18]:
             print('kcam=%2.2f'%(kcam))
-            s2loss1,s2loss2,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(TrainImgLoader,model_info,args.depthscale,args.fscale,args.s2limits,
+            depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(TrainImgLoader,model_info,args.depthscale,args.fscale,args.s2limits,
             dataset=args.dataset,camind=args.camind,aif=args.aif,kcam=kcam,f=9.5e-3)
             print('MSE:%2.4f'%(s2loss2))
+    elif(args.dataset=='nyu'):  
+        print('evaluating on NYU')         
+        depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[0],args,device_comp,calc_distmse=True)
+      
 
-    print('s2 loss2: '+str(s2loss2))
+    print('s2 loss2: '+str(depthMSE))
     print('blur loss = '+str(blurloss))
     print('mean blur = '+str(meanblur))  
     print('min blur = '+str(minblur))
@@ -240,12 +235,6 @@ plt.ylabel('MSE')
 plt.savefig('s2vsmse_f_DVFkcam.png', dpi=500)
 plt.show()
 '''
-         0        1        2    3  --------4----------
-                                     0     1     2 
-list1=['apple','banana','mango',1,['car','van','ship']]
-
-print(list1[4][1])
-
 
 
 
