@@ -8,17 +8,12 @@ Created on Wed Aug 29 14:54:12 2018
 import torch
 import torch.nn as nn
 import torch.utils.data
-from torchvision import transforms, utils
 
-from os import listdir, mkdir
-from os.path import isfile, join, isdir
-from visdom import Visdom
+from os import mkdir
+from os.path import isdir
 import numpy as np
 import importlib
-import random
 import csv
-import OpenEXR, Imath
-from PIL import Image
 from skimage import img_as_float
 import skimage
 if(skimage.__version__ >= '0.18'):
@@ -159,58 +154,6 @@ def compute_all_metrics(est_out, gt_out, flag_mse=True, flag_ssim=True, flag_psn
         pearson_val = compute_pearson(mat_est, mat_gt, mode_limit=mode_limit)
         return mse_val, ssim_val, psnr_val, pearson_val
     return mse_val, ssim_val, psnr_val
-
-
-
-# Visualize current progress
-class Visualization():
-    def __init__(self, port, hostname, model_name, flag_show_input=False, flag_show_mid=False, env_name='main'):
-        self.viz = Visdom(port=port, server=hostname, env=env_name)
-        self.loss_plot = self.viz.line(X=[0.], Y=[0.], name="train", opts=dict(title='Loss ' + model_name))
-        self.flag_show_input = flag_show_input
-        self.flag_show_mid = flag_show_mid
-
-    def initial_viz(self, loss_val, viz_out, viz_gt_img, viz_inp, viz_mid):
-        self.viz.line(Y=[loss_val], X=[0], win=self.loss_plot, name="train", update='replace')
-
-        viz_out_img = torch.clamp(viz_out, 0., 1.)
-        if viz_out.shape[1] > 3 or viz_out.shape[1] == 2:
-            viz_out_img = viz_out_img[:, 0:1, :, :]
-            viz_gt_img = viz_gt_img[:, 0:1, :, :]
-
-        if self.flag_show_mid:
-            viz_mid_img = torch.clamp(viz_mid[0, :, :, :], 0., 1.)
-            viz_mid_img = viz_mid_img.unsqueeze(1)
-            self.img_mid = self.viz.images(viz_mid_img, nrow=8)
-        if self.flag_show_input:
-            viz_inp_img = viz_inp[:, 0:3, :, :]
-            self.img_input = self.viz.images(viz_inp_img, nrow=8)
-
-        self.img_fit = self.viz.images(viz_out_img, nrow=8)
-        self.img_gt = self.viz.images(viz_gt_img, nrow=8)
-
-    def log_viz_img(self, viz_out, viz_gt_img, viz_inp, viz_mid):
-        viz_out_img = torch.clamp(viz_out, 0., 1.)
-
-        if viz_out.shape[1] > 3 or viz_out.shape[1] == 2:
-            viz_out_img = viz_out_img[:, 0:1, :, :]
-            viz_gt_img = viz_gt_img[:, 0:1, :, :]
-
-        if self.flag_show_mid:
-            viz_mid_img = torch.clamp(viz_mid[0, :, :, :], 0., 1.)
-            viz_mid_img = viz_mid_img.unsqueeze(1)
-            self.viz.images(viz_mid_img, win=self.img_mid, nrow=8)
-
-        if self.flag_show_input:
-            viz_inp_img = viz_inp[:, 0:3, :, :]
-            self.viz.images(viz_inp_img, win=self.img_input, nrow=8)
-
-        self.viz.images(viz_out_img, win=self.img_fit, nrow=8)
-        self.viz.images(viz_gt_img, win=self.img_gt, nrow=8)
-
-    def log_viz_plot(self, loss_val, total_iter):
-        self.viz.line(Y=[loss_val], X=[total_iter], win=self.loss_plot, name="train", update='append')
-
 
 def save_config(r, postfix="single"):
     model_name = 'a' + str(r.config['TRAIN_PARAMS']['ARCH_NUM']) + '_d' + str(r.config['DATA_PARAMS']['DATA_NUM']) + '_t' + str(
