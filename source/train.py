@@ -148,9 +148,7 @@ def train_model(loader):
             focus_distance=focus_distance.to(device_comp)
                 
             optimizer.zero_grad()
-            
             mask=(depth*focus_distance>args.s2limits[0])*(depth*focus_distance<args.s2limits[1]).int()
-
             # we only use focal stacks with a single image
             stacknum = 1
 

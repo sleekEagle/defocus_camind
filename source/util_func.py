@@ -160,7 +160,10 @@ def eval(model,loader,args,device_comp,kcam=0,f=0,calc_distmse=False):
             focus_distance=focus_distance.to(device_comp)
 
         if(len(args.s2limits)==2):
-            mask=(depth*focus_distance>args.s2limits[0])*(depth*focus_distance<args.s2limits[1])
+            if(args.dataset=='nyu'):
+                mask=(focus_distance/depth>args.s2limits[0])*(focus_distance/depth<args.s2limits[1]).int()
+            else:
+                mask=(depth*focus_distance>args.s2limits[0])*(depth*focus_distance<args.s2limits[1]).int()
             s=torch.sum(mask).item()
             #continue loop if there are no ground truth data in the range we are interested in
             if(s==0):
