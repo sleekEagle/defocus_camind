@@ -14,13 +14,6 @@ from os.path import isdir
 import numpy as np
 import importlib
 import csv
-from skimage import img_as_float
-import skimage
-if(skimage.__version__ >= '0.18'):
-    from skimage import metrics
-else:
-    from skimage import measure
-from scipy import stats
 import math
 import matplotlib.pyplot as plt
 import sys
@@ -98,62 +91,6 @@ def compute_psnr(img1, img2, mode_limit=False, msk=0):
     PIXEL_MAX = 255.0
     PIXEL_MAX = 1.0
     return 20 * math.log10(PIXEL_MAX / math.sqrt(mse))
-
-
-def compute_ssim(mat_est, mat_gt, mode_limit=False, msk=0):
-    if(skimage.__version__ >= '0.18'):
-        ssim_full = metrics.structural_similarity((mat_gt), (mat_est), data_range=img_as_float(mat_gt).max() - img_as_float(mat_gt).min(), channel_axis=-1,
-                     full=True)
-    else:
-        ssim_full = measure.compare_ssim((mat_gt), (mat_est), data_range=img_as_float(mat_gt).max() - img_as_float(mat_gt).min(), multichannel=True,
-                     full=True)
-    if mode_limit:
-        ssim_mean = np.sum(ssim_full[1]*msk) / (np.sum(msk))
-    else:
-        ssim_mean = np.sum(ssim_full[1]) / (mat_gt.shape[0] * mat_gt.shape[1] * mat_gt.shape[2])
-    # dssim_mean = (1. - ssim_mean) / 2.
-    return ssim_mean
-
-
-def compute_pearson(a, b, mode_limit=False):
-    a, b = a.flat, b.flat
-    if mode_limit:
-        m = np.argwhere(b > (2. / 8.))
-        a = np.delete(a, m)
-        b = np.delete(b, m)
-    if len(a) < 10:
-        coef = 0
-    else:
-        coef, p = stats.pearsonr(a, b)
-    return coef
-
-def compute_all_metrics(est_out, gt_out, flag_mse=True, flag_ssim=True, flag_psnr=True, flag_pearson=False, mode_limit=False):
-    mat_gt = (gt_out[0]).to(torch.device("cpu")).data.numpy().transpose((1, 2, 0))
-    mat_est = (est_out[0]).to(torch.device("cpu")).data.numpy().transpose((1, 2, 0))
-    mat_est = np.clip(mat_est, 0., 1.)
-    mse_val, ssim_val, psnr_val = 1., 0., 0.
-    msk = mat_gt < 0.2
-    msk_num = np.sum(msk)
-
-    if msk_num==0:
-        if flag_pearson:
-            return 0, 0, 0, 0
-        else:
-            return 0, 0, 0
-
-    if flag_ssim:
-        ssim_val = compute_ssim(mat_gt, mat_est, mode_limit=mode_limit, msk=msk)
-    if flag_psnr:
-        psnr_val = compute_psnr(mat_gt, mat_est, mode_limit=mode_limit, msk=msk)
-    if flag_mse:
-        if mode_limit:
-            mse_val = np.sum(msk*((mat_gt - mat_est) ** 2))/msk_num
-        else:
-            mse_val = np.mean((mat_gt - mat_est) ** 2)
-    if flag_pearson:
-        pearson_val = compute_pearson(mat_est, mat_gt, mode_limit=mode_limit)
-        return mse_val, ssim_val, psnr_val, pearson_val
-    return mse_val, ssim_val, psnr_val
 
 def save_config(r, postfix="single"):
     model_name = 'a' + str(r.config['TRAIN_PARAMS']['ARCH_NUM']) + '_d' + str(r.config['DATA_PARAMS']['DATA_NUM']) + '_t' + str(
