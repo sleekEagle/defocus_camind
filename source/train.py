@@ -227,7 +227,7 @@ def train_model(loader):
         # Save model
         if (epoch_iter+1) % 10 == 0:
             print('saving model')
-            torch.save(model.state_dict(), args.savepath +expname+ '.pth')
+            torch.save(model.state_dict(), args.savepath+'/'+expname+ '.pth')
             depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[1],args,device_comp)
             #reduce lr if plateao
             scheduler.step(depthMSE)
