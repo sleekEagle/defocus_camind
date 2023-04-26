@@ -14,7 +14,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
-parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\', help='blender data path')
+parser.add_argument('--datapath', default='/p/blurdepth/data/nyu_depth/', help='blender data path')
 # parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
 parser.add_argument('--bs', type=int,default=20, help='training batch size')
 parser.add_argument('--epochs', type=int,default=1000, help='training batch size')
@@ -27,9 +27,10 @@ blurclip is
 parser.add_argument('--blurclip', default=75.5,help='Clip blur by this value : only applicable for camind model. Default=10')
 parser.add_argument('--blurweight', default=1.0,help='weight for blur loss')
 parser.add_argument('--depthweight', default=1.0,help='weight for blur loss')
-parser.add_argument('--savepath', default='C:\\Users\\lahir\\code\\defocus\\models\\', help='path to the saved model')
-parser.add_argument('--checkpt', default='C:\\Users\\lahir\\models\\camind\\nyu_2.pth', help='path to the saved model')
 # parser.add_argument('--checkpt', default=None, help='path to the saved model')
+parser.add_argument('--savepath', default='/p/blurdepth/models/camind/', help='path to the saved model')
+# parser.add_argument('--checkpt', default='C:\\Users\\lahir\\code\\defocus\\models\\camind_defocusnet_15.0_blurclip6.5_blurweight1.0\\model.pth', help='path to the saved model')
+parser.add_argument('--checkpt', default=None, help='path to the saved model')
 '''
 s2limits is
 [0.1,2.8] for defocusnet
@@ -91,9 +92,9 @@ elif(args.dataset=='defocusnet'):
     BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=1.0,dataset=args.dataset,
     out_depth=args.out_depth)
 elif(args.dataset=='nyu'):
-    rgbpath=args.datapath+"refocused1\\"
-    depthpath=args.datapath+"depth\\"
-    kcampath=args.datapath+"refocused1\\camparam.txt"
+    rgbpath=args.datapath+"refocused1/"
+    depthpath=args.datapath+"depth/"
+    kcampath=args.datapath+"refocused1/camparam.txt"
     loaders, total_steps = NYU_blurred.load_data(rgbpath=rgbpath,depthpath=depthpath,blur=1,train_split=0.8,fstack=0,WORKERS_NUM=0,
             BATCH_SIZE=20,kcampath=kcampath)
 
@@ -226,7 +227,7 @@ def train_model(loader):
         # Save model
         if (epoch_iter+1) % 10 == 0:
             print('saving model')
-            torch.save(model.state_dict(), args.savepath +expname+ '\\model.pth')
+            torch.save(model.state_dict(), args.savepath +expname+ '.pth')
             depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[1],args,device_comp)
             #reduce lr if plateao
             scheduler.step(depthMSE)
