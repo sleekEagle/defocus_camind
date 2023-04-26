@@ -10,6 +10,7 @@ from arch import dofNet_arch3
 import sys
 import os
 import util_func
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
@@ -27,8 +28,8 @@ parser.add_argument('--blurclip', default=75.5,help='Clip blur by this value : o
 parser.add_argument('--blurweight', default=1.0,help='weight for blur loss')
 parser.add_argument('--depthweight', default=1.0,help='weight for blur loss')
 parser.add_argument('--savepath', default='C:\\Users\\lahir\\code\\defocus\\models\\', help='path to the saved model')
-# parser.add_argument('--checkpt', default='C:\\Users\\lahir\\code\\defocus\\models\\camind_defocusnet_15.0_blurclip6.5_blurweight1.0\\model.pth', help='path to the saved model')
-parser.add_argument('--checkpt', default=None, help='path to the saved model')
+parser.add_argument('--checkpt', default='C:\\Users\\lahir\\models\\camind\\nyu_2.pth', help='path to the saved model')
+# parser.add_argument('--checkpt', default=None, help='path to the saved model')
 '''
 s2limits is
 [0.1,2.8] for defocusnet
@@ -105,6 +106,7 @@ def train_model(loader):
     criterion = torch.nn.MSELoss()
     #criterion=F.smooth_l1_loss(reduction='none')
     optimizer = optim.Adam(model_params, lr=args.lr)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min',factor=0.5,patience=5,min_lr=1e-7,verbose=True)
 
     ##### Training
     print("Total number of epochs:", args.epochs)
@@ -226,10 +228,14 @@ def train_model(loader):
             print('saving model')
             torch.save(model.state_dict(), args.savepath +expname+ '\\model.pth')
             depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[1],args,device_comp)
+            #reduce lr if plateao
+            scheduler.step(depthMSE)
+            print('**********************')
             print('depth MSE: '+str(depthMSE))
             print('s1/depth MSE: '+str(valueMSE))
             print('blur loss = '+str(blurloss))
             print('mean blur = '+str(meanblur))
+            print('**********************')
 
 def main():
     train_model(loaders[0])
