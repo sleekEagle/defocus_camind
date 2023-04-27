@@ -11,6 +11,7 @@ import sys
 import os
 import util_func
 from torch.optim.lr_scheduler import StepLR
+from pathlib import Path
 
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
@@ -223,9 +224,12 @@ def train_model(loader):
         #reduce lr at regular intervals
         scheduler.step()
         # Save model
-        if (epoch_iter+1) % 10 == 0:
+        if (epoch_iter+1) % 1 == 0:
             print('saving model')
-            torch.save(model.state_dict(), args.savepath+'/'+expname+ '.pth')
+            path=Path(args.savepath)/expname
+            path.mkdir(parents=True, exist_ok=True)
+            path=path/(str(epoch_iter)+'.pth')
+            torch.save(model.state_dict(), path)
             depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[1],args,device_comp)
             print('**********************')
             print('depth MSE: '+str(depthMSE))

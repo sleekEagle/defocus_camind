@@ -87,12 +87,9 @@ elif(args.dataset=='defocusnet'):
     out_depth=args.out_depth)
 elif(args.dataset=='nyu'):
     print('Getting NUY data...')
-    rgbpath=args.datapath+"refocused1\\"
-    depthpath=args.datapath+"depth\\"
-    kcampath=args.datapath+"refocused1\\camparam.txt"
-    loaders, total_steps = NYU_blurred.load_data(rgbpath=rgbpath,depthpath=depthpath,blur=1,train_split=0.8,fstack=0,WORKERS_NUM=0,
-            BATCH_SIZE=args.bs,MAX_DPT=1,blurclip=1,kcampath=kcampath)
-
+    datanum=2
+    loaders, total_steps = NYU_blurred.load_data(datapath=args.datapath,datanum=datanum,blur=1,fstack=0,WORKERS_NUM=0,
+            BATCH_SIZE=20)
 def main():
     if(args.dataset=='blender'):  
         print('evaluating on blender')         
@@ -110,7 +107,7 @@ def main():
             print('MSE:%2.4f'%(s2loss2))
     elif(args.dataset=='nyu'):  
         print('evaluating on NYU')         
-        depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[0],args,device_comp,calc_distmse=True)
+        depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[1],args,device_comp,calc_distmse=True)
       
 
     print('s2 loss2: '+str(depthMSE))
