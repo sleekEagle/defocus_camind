@@ -93,7 +93,7 @@ elif(args.dataset=='defocusnet'):
     out_depth=args.out_depth)
 elif(args.dataset=='nyu'):
     datanum=1
-    loaders, total_steps = NYU_blurred.load_data(datapath=args.datapath,datanum=datanum,blur=1,train_split=0.8,fstack=0,WORKERS_NUM=0,
+    loaders, total_steps = NYU_blurred.load_data(datapath=args.datapath,datanum=datanum,blur=1,fstack=0,WORKERS_NUM=0,
             BATCH_SIZE=20)
 
 # ============ init ===============

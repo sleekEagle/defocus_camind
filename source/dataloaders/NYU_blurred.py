@@ -84,15 +84,14 @@ blur1,blur2... corresponds to the focal stack
 '''
 
 class ImageDataset(torch.utils.data.Dataset):
-    """Focal place dataset."""
-
-
     # datapath="C:\\Users\\lahir\\data\\nyu_depth\\noborders"
     # datanum=1
+    # f='267.png'
+    # int(f[:-4])
     # imgp=rgbpath/"1261.png"
     # cv2.imread(str(imgp),cv2.IMREAD_UNCHANGED)
 
-    def __init__(self, datapath,datanum,transform_fnc=None,blur=1,aif=0,fstack=0, max_dpt=1.,blurclip=1.,
+    def __init__(self,datapath,datanum,idx,transform_fnc=None,blur=1,aif=0,fstack=0, max_dpt=1.,blurclip=1.,
                  out_depth=False):
         p=Path(datapath)
         self.rgbpath=p/("refocused"+str(datanum))
@@ -117,11 +116,9 @@ class ImageDataset(torch.utils.data.Dataset):
             print('kcam:'+str(self.kcam))
             print('f:'+str(self.f))
 
-            print(self.kcam*(3-self.f))
-
         ##### Load and sort all images
-        self.imglist_rgb = [f for f in listdir(self.rgbpath) if isfile(join(self.rgbpath, f)) and f[-4:] == ".png"]
-        self.imglist_dpt = [f for f in listdir(self.depthpath) if isfile(join(self.depthpath, f)) and f[-4:] == ".png"]
+        self.imglist_rgb = [f for f in listdir(self.rgbpath) if (isfile(join(self.rgbpath, f)) and f[-4:] == ".png" and int(f[:-4]) in idx)]
+        self.imglist_dpt = [f for f in listdir(self.depthpath) if (isfile(join(self.depthpath, f)) and f[-4:] == ".png" and int(f[:-4]) in idx)]
 
         print("Total number of samples", len(self.imglist_dpt), "  Total number of seqs", len(self.imglist_dpt))
 
@@ -172,40 +169,42 @@ class ImageDataset(torch.utils.data.Dataset):
 class Transform(object):
     def __call__(self, image):
         image=torch.permute(image,(2,0,1))
-        # _,w,h=image.shape
-        # cropped=F.crop(image,CROP_PIX,CROP_PIX,w-CROP_PIX,h-CROP_PIX)
         return image
     
-
-
-def load_data(datapath,datanum, blur,train_split,fstack,
-              WORKERS_NUM, BATCH_SIZE, MAX_DPT=1.,blurclip=1.,kcampath=None,out_depth=False):
-    tr=transforms.Compose([
+def load_data(datapath,datanum, blur,fstack,
+              WORKERS_NUM, BATCH_SIZE, MAX_DPT=1.,blurclip=1.,out_depth=False):
+    
+    #reading splits
+    p=Path(datapath)
+    splitpath=p/"splits.mat"
+    mat=scipy.io.loadmat(splitpath)
+    test_idx=mat['testNdxs'][:,0]
+    train_idx=mat['trainNdxs'][:,0]
+    
+    tr_train=transforms.Compose([
         Transform(),
         transforms.RandomCrop((256,256)),
         transforms.RandomHorizontalFlip(),
         transforms.RandomVerticalFlip()
         ])
-    img_dataset = ImageDataset(datapath,datanum,blur=blur,transform_fnc=tr,
+    tr_test=transforms.Compose([
+        Transform(),
+        transforms.RandomCrop((256,256)),
+        ])
+    train_dataset = ImageDataset(datapath,datanum,train_idx,blur=blur,transform_fnc=tr_train,
+                               fstack=fstack, max_dpt=MAX_DPT,
+                               blurclip=blurclip,out_depth=out_depth)
+    test_dataset = ImageDataset(datapath,datanum,test_idx,blur=blur,transform_fnc=tr_test,
                                fstack=fstack, max_dpt=MAX_DPT,
                                blurclip=blurclip,out_depth=out_depth)
 
-    indices = list(range(len(img_dataset)))
-    split = int(len(img_dataset) * train_split)
+    loader_train = torch.utils.data.DataLoader(dataset=train_dataset, num_workers=WORKERS_NUM, batch_size=BATCH_SIZE, shuffle=True)
+    loader_valid = torch.utils.data.DataLoader(dataset=test_dataset, num_workers=1, batch_size=1, shuffle=False)
 
-    indices_train = indices[:split]
-    indices_valid = indices[split:]
-
-    dataset_train = torch.utils.data.Subset(img_dataset, indices_train)
-    dataset_valid = torch.utils.data.Subset(img_dataset, indices_valid)
-
-    loader_train = torch.utils.data.DataLoader(dataset=dataset_train, num_workers=WORKERS_NUM, batch_size=BATCH_SIZE, shuffle=True)
-    loader_valid = torch.utils.data.DataLoader(dataset=dataset_valid, num_workers=1, batch_size=1, shuffle=False)
-
-    total_steps = int(len(dataset_train) / BATCH_SIZE)
+    total_steps = int(len(train_dataset) / BATCH_SIZE)
     print("Total number of steps per epoch:", total_steps)
-    print("Total number of training sample:", len(dataset_train))
-    print("Total number of validataion sample:", len(dataset_valid))
+    print("Total number of training sample:", len(train_dataset))
+    print("Total number of validataion sample:", len(test_dataset))
 
     return [loader_train, loader_valid], total_steps
 
