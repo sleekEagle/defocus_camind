@@ -10,7 +10,7 @@ from arch import dofNet_arch3
 import sys
 import os
 import util_func
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import StepLR
 
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
@@ -97,7 +97,6 @@ elif(args.dataset=='nyu'):
     loaders, total_steps = NYU_blurred.load_data(rgbpath=rgbpath,depthpath=depthpath,blur=1,train_split=0.8,fstack=0,WORKERS_NUM=0,
             BATCH_SIZE=20,kcampath=kcampath)
 
-
 # ============ init ===============
 torch.manual_seed(2023)
 torch.cuda.manual_seed(2023)
@@ -106,7 +105,7 @@ def train_model(loader):
     criterion = torch.nn.MSELoss()
     #criterion=F.smooth_l1_loss(reduction='none')
     optimizer = optim.Adam(model_params, lr=args.lr)
-    scheduler = ReduceLROnPlateau(optimizer, mode='min',factor=0.5,patience=5,min_lr=1e-7,verbose=True)
+    scheduler = StepLR(optimizer,step_size=500, gamma=0.5,verbose=True)
 
     ##### Training
     print("Total number of epochs:", args.epochs)
@@ -222,14 +221,13 @@ def train_model(loader):
 
                 total_iter = total_steps * epoch_iter + st_iter
                 loss_sum, iter_count = 0,0
-
+        #reduce lr at regular intervals
+        scheduler.step()
         # Save model
         if (epoch_iter+1) % 10 == 0:
             print('saving model')
             torch.save(model.state_dict(), args.savepath +expname+ '\\model.pth')
             depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[1],args,device_comp)
-            #reduce lr if plateao
-            scheduler.step(depthMSE)
             print('**********************')
             print('depth MSE: '+str(depthMSE))
             print('s1/depth MSE: '+str(valueMSE))
