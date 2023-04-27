@@ -24,7 +24,7 @@ blurclip is
 6.5 for defocusnet
 75.5 for NYU
 '''
-parser.add_argument('--blurclip', default=75.5,help='Clip blur by this value : only applicable for camind model. Default=10')
+parser.add_argument('--blurclip', default=65.0,help='Clip blur by this value : only applicable for camind model. Default=10')
 parser.add_argument('--blurweight', default=1.0,help='weight for blur loss')
 parser.add_argument('--depthweight', default=1.0,help='weight for blur loss')
 # parser.add_argument('--checkpt', default=None, help='path to the saved model')

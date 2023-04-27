@@ -9,14 +9,23 @@ import matplotlib.pyplot as plt
 import cv2
 import torchvision.transforms.functional as F
 
-# N=1
+# N=1.0
 # f =50.0e-3
-# s1= 3.0
+# s1= 2.0
 # px =36e-6
 
 # k=f**2/N/px
 # k=1/k
 # k
+# mind=0.71
+# maxd=9.99
+# s2=np.arange(mind,maxd,0.01)
+
+# blur=get_blur(s1,s2,f,k)
+# min(blur)
+# max(blur)
+
+
 
 CROP_PIX=15
 
@@ -243,7 +252,7 @@ blur mean=6.4919104153118425
 '''
 
 
-def get_data_stats(blurclip):
+def get_data_stats():
     depthpath='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\depth\\'
     rgbpath='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\refocused1\\'
     kcampath='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\refocused1\\camparam.txt'
@@ -314,7 +323,7 @@ def get_loader_stats(loader):
     print('blur mean='+str(blurmean/count))
     return depthlist
 
-# get_data_stats(1)
+# get_data_stats()
 
 '''
 blur_thres=7.0
