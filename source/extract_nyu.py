@@ -2,9 +2,17 @@ import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 import imageio
+import scipy 
+
+
+splits="C:\\Users\\lahir\\data\\matlabfiles\\splits.mat"
+mat=scipy.io.loadmat(splits)
+test_idx=mat['testNdxs']
+train_idx=mat['trainNdxs']
+
 
 outpath='C:\\Users\\lahir\\data\\nyu_depthnew\\'
-with h5py.File('C:\\Users\\lahir\\data\\nyu_depth_v2_labeled.mat', 'r') as f:
+with h5py.File('C:\\Users\\lahir\\data\\matlabfiles\\nyu_depth_v2_labeled.mat', 'r') as f:
     depths=f['depths'][:,:,:]
     imgs=f['images'][:,:,:,:]
 
