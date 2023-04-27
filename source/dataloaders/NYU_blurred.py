@@ -8,6 +8,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 import torchvision.transforms.functional as F
+import scipy 
+from pathlib import Path
 
 # N=1.0
 # f =50.0e-3
@@ -84,11 +86,18 @@ blur1,blur2... corresponds to the focal stack
 class ImageDataset(torch.utils.data.Dataset):
     """Focal place dataset."""
 
-    def __init__(self, rgbpath,depthpath, transform_fnc=None,blur=1,aif=0,fstack=0, max_dpt=1.,blurclip=1.,kcampath=None,
-                 out_depth=False):
 
-        self.rgbpath=rgbpath
-        self.depthpath=depthpath
+    # datapath="C:\\Users\\lahir\\data\\nyu_depth\\noborders"
+    # datanum=1
+    # imgp=rgbpath/"1261.png"
+    # cv2.imread(str(imgp),cv2.IMREAD_UNCHANGED)
+
+    def __init__(self, datapath,datanum,transform_fnc=None,blur=1,aif=0,fstack=0, max_dpt=1.,blurclip=1.,
+                 out_depth=False):
+        p=Path(datapath)
+        self.rgbpath=p/("refocused"+str(datanum))
+        self.depthpath=p/"depth"
+        camparampath=p/("refocused"+str(datanum))/"camparam.txt"
 
         self.transform_fnc = transform_fnc
 
@@ -96,10 +105,9 @@ class ImageDataset(torch.utils.data.Dataset):
         self.aif=aif
         self.fstack=fstack
         self.blurclip=blurclip
-        self.kcampath=kcampath
         self.out_depth=out_depth
-        if(kcampath):
-            self.kcamdict=read_kcamfile(kcampath)
+        if(camparampath):
+            self.kcamdict=read_kcamfile(camparampath)
             #calculate kcam based on parameters in file
             N=self.kcamdict['N']
             self.f=self.kcamdict['f']
@@ -112,8 +120,8 @@ class ImageDataset(torch.utils.data.Dataset):
             print(self.kcam*(3-self.f))
 
         ##### Load and sort all images
-        self.imglist_rgb = [f for f in listdir(rgbpath) if isfile(join(rgbpath, f)) and f[-4:] == ".png"]
-        self.imglist_dpt = [f for f in listdir(depthpath) if isfile(join(depthpath, f)) and f[-4:] == ".png"]
+        self.imglist_rgb = [f for f in listdir(self.rgbpath) if isfile(join(self.rgbpath, f)) and f[-4:] == ".png"]
+        self.imglist_dpt = [f for f in listdir(self.depthpath) if isfile(join(self.depthpath, f)) and f[-4:] == ".png"]
 
         print("Total number of samples", len(self.imglist_dpt), "  Total number of seqs", len(self.imglist_dpt))
 
@@ -130,7 +138,7 @@ class ImageDataset(torch.utils.data.Dataset):
 
         ##### Read and process an image
         #read depth image
-        img_dpt = cv2.imread(self.depthpath + self.imglist_dpt[idx],cv2.IMREAD_UNCHANGED)
+        img_dpt = cv2.imread(str(self.depthpath/self.imglist_dpt[idx]),cv2.IMREAD_UNCHANGED)
         #convert from mm to m
         img_dpt=img_dpt/1000.
         #img_dpt_scaled = np.clip(img_dpt, 0., 1.9)
@@ -141,7 +149,7 @@ class ImageDataset(torch.utils.data.Dataset):
             mat_dpt = mat_dpt/self.s1
 
         #read rgb image
-        im = cv2.imread(self.rgbpath + self.imglist_rgb[idx],cv2.IMREAD_UNCHANGED)
+        im = cv2.imread(str(self.rgbpath/self.imglist_rgb[idx]),cv2.IMREAD_UNCHANGED)
         img_rgb = np.array(im)
         mat_rgb = img_rgb.copy() / 255.
             
@@ -170,7 +178,7 @@ class Transform(object):
     
 
 
-def load_data(rgbpath,depthpath, blur,train_split,fstack,
+def load_data(datapath,datanum, blur,train_split,fstack,
               WORKERS_NUM, BATCH_SIZE, MAX_DPT=1.,blurclip=1.,kcampath=None,out_depth=False):
     tr=transforms.Compose([
         Transform(),
@@ -178,9 +186,9 @@ def load_data(rgbpath,depthpath, blur,train_split,fstack,
         transforms.RandomHorizontalFlip(),
         transforms.RandomVerticalFlip()
         ])
-    img_dataset = ImageDataset(rgbpath=rgbpath,depthpath=depthpath,blur=blur,transform_fnc=tr,
+    img_dataset = ImageDataset(datapath,datanum,blur=blur,transform_fnc=tr,
                                fstack=fstack, max_dpt=MAX_DPT,
-                               blurclip=blurclip,kcampath=kcampath,out_depth=out_depth)
+                               blurclip=blurclip,out_depth=out_depth)
 
     indices = list(range(len(img_dataset)))
     split = int(len(img_dataset) * train_split)
