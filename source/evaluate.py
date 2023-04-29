@@ -88,7 +88,7 @@ elif(args.dataset=='defocusnet'):
     out_depth=args.out_depth)
 elif(args.dataset=='nyu'):
     print('Getting NUY data...')
-    datanum="6"
+    datanum=args.datanum
     loaders, total_steps = NYU_blurred.load_data(datapath=args.datapath,datanum=datanum,blur=1,fstack=0,WORKERS_NUM=0,
             BATCH_SIZE=1)
 def main():

@@ -38,7 +38,8 @@ s2limits is
 [0.7,10.0] for NYU 
 '''
 parser.add_argument('--s2limits', nargs='+', default=[0.7,10.0],  help='the interval of depth where the errors are calculated')
-parser.add_argument('--dataset', default='nyu', help='blender data path')
+parser.add_argument('--dataset', default='nyu', help='data path')
+parser.add_argument('--datanum', default='4', help='dataset number. Only applicable for NYU depth')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
 parser.add_argument('--out_depth', type=bool,default=False, help='True: use camera independent model. False: use defocusnet model')
@@ -93,7 +94,7 @@ elif(args.dataset=='defocusnet'):
     BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=1.0,dataset=args.dataset,
     out_depth=args.out_depth)
 elif(args.dataset=='nyu'):
-    datanum=1
+    datanum=args.datanum
     loaders, total_steps = NYU_blurred.load_data(datapath=args.datapath,datanum=datanum,blur=1,fstack=0,WORKERS_NUM=0,
             BATCH_SIZE=20)
 
