@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser(description='camIndDefocus')
 parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders', help='blender data path')
 # parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
 parser.add_argument('--bs', type=int,default=20, help='training batch size')
-parser.add_argument('--epochs', type=int,default=1000, help='training batch size')
+parser.add_argument('--epochs', type=int,default=10000, help='training batch size')
 parser.add_argument('--depthscale', default=28.,help='divide all depths by this value')
 '''
 blurclip is
@@ -93,7 +93,7 @@ elif(args.dataset=='defocusnet'):
     BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=1.0,dataset=args.dataset,
     out_depth=args.out_depth)
 elif(args.dataset=='nyu'):
-    datanum=1
+    datanum=5
     loaders, total_steps = NYU_blurred.load_data(datapath=args.datapath,datanum=datanum,blur=1,fstack=0,WORKERS_NUM=0,
             BATCH_SIZE=20)
 
@@ -224,7 +224,7 @@ def train_model(loader):
         #reduce lr at regular intervals
         scheduler.step()
         # Save model
-        if (epoch_iter+1) % 1 == 0:
+        if (epoch_iter+1) % 10 == 0:
             print('saving model')
             path=Path(args.savepath)/expname
             path.mkdir(parents=True, exist_ok=True)
