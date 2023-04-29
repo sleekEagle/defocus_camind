@@ -264,6 +264,9 @@ def eval(model,loader,args,device_comp,kcam=0,f=0,calc_distmse=False):
         print('\nMSE:')
         for i,v in enumerate(values):
             print("%4.3f"%(mse_[i].item()),end=",")
+        print('\nRMSE:')
+        for i,v in enumerate(values):
+            print("%4.3f"%((mse_[i].item())**0.5),end=",")
         print('')
     return meanMSE/len(loader), meanMSE2/len(loader),meanblurmse/len(loader),meanblur/len(loader),gt_meanblur/len(loader),minblur,maxblur
 

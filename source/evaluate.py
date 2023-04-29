@@ -19,15 +19,16 @@ parser = argparse.ArgumentParser(description='camIndDefocus')
 parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\', help='blender data path')
 parser.add_argument('--kcamfile', default=None, help='blender data path')
 parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
-parser.add_argument('--dataset', default='nyu', help='blender data path')
+parser.add_argument('--dataset', default='nyu', help='dataset name')
+parser.add_argument('--datanum', default='4', help='dataset number. Only applicable for NYU depth')
 parser.add_argument('--bs', type=int,default=1, help='training batch size')
 parser.add_argument('--depthscale', default=28.,help='divide all depths by this value')
 parser.add_argument('--blurclip', default=6.5,help='Clip blur by this value : only applicable for camind model. Default=10')
-parser.add_argument('--checkpt', default='C:\\Users\\lahir\\models\\camind\\nyu_2.pth', help='path to the saved model')
+parser.add_argument('--checkpt', default='C:\\Users\\lahir\\models\\camind\\1849.pth', help='path to the saved model')
 #parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_norelu_N1_1.9_f1.9_blurclip8.0_blurweight1.0\\a03_expcamind_norelu_N1_1.9_f1.9_blurclip8.0_blurweight1.0_ep0.pth', help='path to the saved model')
 #parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a04_expaif_N1_d_1.9\\a04_expaif_N1_d_1.9_ep0.pth', help='path to the saved model')
 #parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3_ep0.pth', help='path to the saved model')
-parser.add_argument('--s2limits', nargs='+', default=[3.,4.],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--s2limits', nargs='+', default=[0.71,10.0],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
 parser.add_argument('--out_depth', type=bool,default=False, help='True: use camera independent model. False: use defocusnet model')
@@ -87,9 +88,9 @@ elif(args.dataset=='defocusnet'):
     out_depth=args.out_depth)
 elif(args.dataset=='nyu'):
     print('Getting NUY data...')
-    datanum=2
+    datanum="6"
     loaders, total_steps = NYU_blurred.load_data(datapath=args.datapath,datanum=datanum,blur=1,fstack=0,WORKERS_NUM=0,
-            BATCH_SIZE=20)
+            BATCH_SIZE=1)
 def main():
     if(args.dataset=='blender'):  
         print('evaluating on blender')         
@@ -110,7 +111,7 @@ def main():
         depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[1],args,device_comp,calc_distmse=True)
       
 
-    print('s2 loss2: '+str(depthMSE))
+    print('s2 loss2: MSE: '+str(depthMSE)+" RMSE:"+str(depthMSE**0.5))
     print('blur loss = '+str(blurloss))
     print('mean blur = '+str(meanblur))  
     print('min blur = '+str(minblur))
