@@ -18,7 +18,7 @@ parser = argparse.ArgumentParser(description='camIndDefocus')
 parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders', help='blender data path')
 # parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
 parser.add_argument('--bs', type=int,default=20, help='training batch size')
-parser.add_argument('--epochs', type=int,default=1000, help='training batch size')
+parser.add_argument('--epochs', type=int,default=10000, help='training batch size')
 parser.add_argument('--depthscale', default=28.,help='divide all depths by this value')
 '''
 blurclip is
@@ -225,7 +225,7 @@ def train_model(loader):
         #reduce lr at regular intervals
         scheduler.step()
         # Save model
-        if (epoch_iter+1) % 1 == 0:
+        if (epoch_iter+1) % 10 == 0:
             print('saving model')
             path=Path(args.savepath)/expname
             path.mkdir(parents=True, exist_ok=True)
