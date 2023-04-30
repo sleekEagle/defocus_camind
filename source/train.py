@@ -240,7 +240,7 @@ def train_model(loader):
             print('s1/depth MSE: '+str(valueMSE))
             print('blur loss = '+str(blurloss))
             print('mean blur = '+str(meanblur))
-            print('**********************')
+            print('***********************')
 
 def main():
     train_model(loaders[0])
