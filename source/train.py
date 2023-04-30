@@ -19,15 +19,15 @@ parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\no
 # parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
 parser.add_argument('--bs', type=int,default=20, help='training batch size')
 parser.add_argument('--epochs', type=int,default=10000, help='training batch size')
-parser.add_argument('--depthscale', default=28.,help='divide all depths by this value')
+parser.add_argument('--depthscale', type=float,default=28.,help='divide all depths by this value')
 '''
 blurclip is
 6.5 for defocusnet
 75.5 for NYU
 '''
-parser.add_argument('--blurclip', default=65.0,help='Clip blur by this value : only applicable for camind model. Default=10')
-parser.add_argument('--blurweight', default=1.0,help='weight for blur loss')
-parser.add_argument('--depthweight', default=1.0,help='weight for blur loss')
+parser.add_argument('--blurclip', type=float,default=65.0,help='Clip blur by this value : only applicable for camind model. Default=10')
+parser.add_argument('--blurweight', type=float,default=1.0,help='weight for blur loss')
+parser.add_argument('--depthweight', type=float,default=1.0,help='weight for blur loss')
 # parser.add_argument('--checkpt', default=None, help='path to the saved model')
 parser.add_argument('--savepath', default='C:\\Users\\lahir\\code\\defocus\\models', help='path to the saved model')
 # parser.add_argument('--checkpt', default='C:\\Users\\lahir\\code\\defocus\\models\\camind_defocusnet_15.0_blurclip6.5_blurweight1.0\\model.pth', help='path to the saved model')

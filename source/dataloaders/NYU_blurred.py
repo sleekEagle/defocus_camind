@@ -260,11 +260,10 @@ blur mean=6.4919104153118425
 
 
 def get_data_stats():
-    depthpath='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\depth\\'
-    rgbpath='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\refocused1\\'
-    kcampath='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\refocused1\\camparam.txt'
-    loaders, total_steps = load_data(rgbpath=rgbpath,depthpath=depthpath,blur=1,train_split=0.8,fstack=0,WORKERS_NUM=0,
-        BATCH_SIZE=1,MAX_DPT=1.0,blurclip=1,kcampath=kcampath,out_depth=True)
+    datanum="4"
+    datapath="C:\\Users\\lahir\\data\\nyu_depth\\noborders\\"
+    loaders, total_steps = load_data(datapath=datapath,datanum=datanum,blur=1,fstack=0,WORKERS_NUM=0,
+            BATCH_SIZE=20)
     print('stats of train data')
     depthlist=get_loader_stats(loaders[0])
     #plot histogram of GT depths
@@ -330,7 +329,7 @@ def get_loader_stats(loader):
     print('blur mean='+str(blurmean/count))
     return depthlist
 
-# get_data_stats()
+get_data_stats()
 
 '''
 blur_thres=7.0
