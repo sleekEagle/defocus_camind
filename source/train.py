@@ -107,6 +107,7 @@ def train_model(loader):
     #criterion=F.smooth_l1_loss(reduction='none')
     optimizer = optim.Adam(model_params, lr=args.lr)
     scheduler = StepLR(optimizer,step_size=500, gamma=0.5,verbose=True)
+    min_depthMSE=1000
 
     ##### Training
     print("Total number of epochs:", args.epochs)
@@ -226,12 +227,14 @@ def train_model(loader):
         scheduler.step()
         # Save model
         if (epoch_iter+1) % 10 == 0:
-            print('saving model')
-            path=Path(args.savepath)/expname
-            path.mkdir(parents=True, exist_ok=True)
-            path=path/(str(epoch_iter)+'.pth')
-            torch.save(model.state_dict(), path)
             depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[1],args,device_comp)
+            if(depthMSE<min_depthMSE):
+                min_depthMSE=depthMSE
+                path=Path(args.savepath)/expname
+                path.mkdir(parents=True, exist_ok=True)
+                path=path/(str(epoch_iter)+'.pth')
+                print('saving model')
+                torch.save(model.state_dict(), path)
             print('**********************')
             print('depth MSE: '+str(depthMSE))
             print('s1/depth MSE: '+str(valueMSE))

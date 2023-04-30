@@ -336,7 +336,7 @@ s1range=[0.1,1.5]
 get_workable_s1s2ranges(p,N,f,s2range,s1range,blur_thres)
 '''
 # get_loader_stats(loaders[0])
-get_data_stats(datapath)
+# get_data_stats(datapath)
 
 
 
