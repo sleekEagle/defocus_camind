@@ -329,7 +329,7 @@ def get_loader_stats(loader):
     print('blur mean='+str(blurmean/count))
     return depthlist
 
-get_data_stats()
+# get_data_stats()
 
 '''
 blur_thres=7.0
