@@ -12,7 +12,7 @@ import scipy
 from pathlib import Path
 
 # N=1.0
-# f =50.0e-3
+# f =16e-3
 # s1= 2.0
 # px =36e-6
 
@@ -27,9 +27,8 @@ from pathlib import Path
 # min(blur)
 # max(blur)
 
-
-
-CROP_PIX=15
+# plt.plot(s2,blur)
+# plt.show()
 
 #read kcams.txt file
 def read_kcamfile(file):

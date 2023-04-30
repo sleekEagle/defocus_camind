@@ -261,7 +261,7 @@ def load_data(data_dir, blur,aif,train_split,fstack,
 
 
 # datapath='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\'
-#datapath='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\'
+datapath='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\'
 # # datapath='C:\\usr\\wiss\\maximov\\RD\\DepthFocus\\Datasets\\focal_data\\'
 # blurclip=1
 
@@ -269,9 +269,10 @@ def load_data(data_dir, blur,aif,train_split,fstack,
 #        BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=1,dataset='defocusnet',
 #        out_depth=False)
 
-def get_data_stats(datapath,blurclip):
-    loaders, total_steps = load_data(datapath,blur=1,aif=0,train_split=0.8,fstack=1,WORKERS_NUM=0,
-        BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=blurclip)
+def get_data_stats(datapath):
+    loaders, total_steps = load_data(datapath,blur=1,aif=0,train_split=0.8,fstack=0,WORKERS_NUM=0,
+    BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=1.0,dataset='defocusnet',
+    out_depth=True)
     print('stats of train data')
     get_loader_stats(loaders[0])
     print('______')
@@ -335,6 +336,7 @@ s1range=[0.1,1.5]
 get_workable_s1s2ranges(p,N,f,s2range,s1range,blur_thres)
 '''
 # get_loader_stats(loaders[0])
+# get_data_stats(datapath)
 
 
 

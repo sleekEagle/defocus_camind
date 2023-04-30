@@ -126,6 +126,8 @@ def eval(model,loader,args,device_comp,kcam=0,f=0,calc_distmse=False):
     #store distance wise mse
     distmse,distsum,distblur=torch.zeros(100),torch.zeros(100),torch.zeros(100)
 
+    c=0
+
     print('Total samples = '+str(len(loader)))
     for st_iter, sample_batch in enumerate(loader):
         #if(st_iter>100):
@@ -160,16 +162,14 @@ def eval(model,loader,args,device_comp,kcam=0,f=0,calc_distmse=False):
             focus_distance=focus_distance.to(device_comp)
 
         if(len(args.s2limits)==2):
-            if(args.dataset=='nyu'):
-                mask=(focus_distance/depth>args.s2limits[0])*(focus_distance/depth<args.s2limits[1]).int()
-            else:
-                mask=(depth*focus_distance>args.s2limits[0])*(depth*focus_distance<args.s2limits[1]).int()
+            mask=((depth*focus_distance)>args.s2limits[0])*((depth*focus_distance)<args.s2limits[1]).int()
             s=torch.sum(mask).item()
             #continue loop if there are no ground truth data in the range we are interested in
             if(s==0):
+                print('no data in the provided range for this batch. skipping.')
                 continue
         else:
-            mask=torch.ones_like(gt_step2)
+            mask=torch.ones_like(depth)
         
         stacknum = 1
         X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
@@ -218,14 +218,14 @@ def eval(model,loader,args,device_comp,kcam=0,f=0,calc_distmse=False):
             blurmse=torch.mean(torch.square(pred_blur*args.blurclip-blur_)[mask_>0]).item()
             meanblurmse+=blurmse
         #calculate MSE value
-        denorm_depth=denormalize(pred_depth)
         if(args.out_depth):
-            mse=torch.mean(torch.square(denorm_depth-depth)[mask>0]).item()
+            mse=torch.mean(torch.square(pred_depth-depth)[mask>0]).item()
         else:
             mse=torch.mean(torch.square(focus_distance*pred_depth-focus_distance*depth)[mask>0]).item()
             mse2=torch.mean(torch.square(pred_depth-depth)[mask>0]).item()
         meanMSE+=mse
         meanMSE2+=mse2
+        c+=1
 
         if(calc_distmse):
             if(args.dataset=='nyu'):
@@ -268,7 +268,9 @@ def eval(model,loader,args,device_comp,kcam=0,f=0,calc_distmse=False):
         for i,v in enumerate(values):
             print("%4.3f"%((mse_[i].item())**0.5),end=",")
         print('')
-    return meanMSE/len(loader), meanMSE2/len(loader),meanblurmse/len(loader),meanblur/len(loader),gt_meanblur/len(loader),minblur,maxblur
+    print("c:"+str(c))
+    print("loader:"+str(len(loader)))
+    return meanMSE/c,meanMSE2/c,meanblurmse/c,meanblur/c,gt_meanblur/c,minblur,maxblur
 
 def kcamwise_blur(model,loader,args,device_comp):
     print('iscamind:'+str(args.camind))
