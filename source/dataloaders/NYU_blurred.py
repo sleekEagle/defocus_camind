@@ -11,24 +11,24 @@ import torchvision.transforms.functional as F
 import scipy 
 from pathlib import Path
 
-# N=1.0
-# f =16e-3
-# s1= 2.0
-# px =36e-6
+N=1.0
+f =16e-3
+s1= 1
+px =36e-6
 
-# k=f**2/N/px
-# k=1/k
-# k
-# mind=0.71
-# maxd=9.99
-# s2=np.arange(mind,maxd,0.01)
+k=f**2/N/px
+k=1/k
+k
+mind=0.71
+maxd=9.99
+s2=np.arange(mind,maxd,0.01)
 
-# blur=get_blur(s1,s2,f,k)
-# min(blur)
-# max(blur)
+blur=get_blur(s1,s2,f,k)
+min(blur)
+max(blur)
 
-# plt.plot(s2,blur)
-# plt.show()
+plt.plot(s2,blur)
+plt.show()
 
 #read kcams.txt file
 def read_kcamfile(file):
