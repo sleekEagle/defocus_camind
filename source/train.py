@@ -13,7 +13,6 @@ import util_func
 from torch.optim.lr_scheduler import StepLR
 from pathlib import Path
 
-
 parser = argparse.ArgumentParser(description='camIndDefocus')
 # parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders', help='blender data path')
 parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')

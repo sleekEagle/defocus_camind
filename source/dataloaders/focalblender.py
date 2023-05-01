@@ -8,6 +8,8 @@ import numpy as np
 import random
 import OpenEXR
 from PIL import Image
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
 
 #read kcams.txt file
 def read_kcamfile(file):
