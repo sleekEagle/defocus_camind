@@ -6,7 +6,7 @@ import numpy as np
 import math
 import argparse
 from dataloaders import NYU_blurred, focalblender
-from arch import dofNet_arch3
+from arch import dofNet_arch3,dofNet_arch4
 import sys
 import os
 import util_func
@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser(description='camIndDefocus')
 parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
 parser.add_argument('--bs', type=int,default=20, help='training batch size')
 parser.add_argument('--epochs', type=int,default=10000, help='training batch size')
-parser.add_argument('--depthscale', type=float,default=28.,help='divide all depths by this value')
+parser.add_argument('--depthscale', type=float,default=1.,help='divide all depths by this value')
 '''
 blurclip is
 6.5 for defocusnet
@@ -42,7 +42,7 @@ parser.add_argument('--dataset', default='defocusnet', help='data path')
 parser.add_argument('--datanum', default='4', help='dataset number. Only applicable for NYU depth')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
-parser.add_argument('--out_depth', type=bool,default=False, help='True: use camera independent model. False: use defocusnet model')
+parser.add_argument('--out_depth', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--lr',type=float, default=0.0001,help='dilvide all depths by this value')
 args = parser.parse_args()
 
@@ -63,11 +63,18 @@ load model
 #GPU or CPU
 device_comp = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-ch_inp_num = 3
-ch_out_num = 1
-model = dofNet_arch3.AENet(ch_inp_num, 1, 16, flag_step2=True)
-model = model.to(device_comp)
-model_params = model.parameters()
+if(args.out_depth):
+    ch_inp_num = 3
+    ch_out_num = 1
+    model = dofNet_arch4.AENet(ch_inp_num, 1, 16, flag_step2=True)
+    model = model.to(device_comp)
+    model_params = model.parameters()
+else:
+    ch_inp_num = 3
+    ch_out_num = 1
+    model = dofNet_arch3.AENet(ch_inp_num, 1, 16, flag_step2=True)
+    model = model.to(device_comp)
+    model_params = model.parameters()
 
 # loading weights of the first step
 if args.checkpt:
@@ -151,7 +158,10 @@ def train_model(loader):
             focus_distance=focus_distance.to(device_comp)
                 
             optimizer.zero_grad()
-            mask=(depth*focus_distance>args.s2limits[0])*(depth*focus_distance<args.s2limits[1]).int()
+            if(args.out_depth==True):
+                 mask=(depth>args.s2limits[0])*(depth<args.s2limits[1]).int()
+            else:  
+                mask=((focus_distance*depth)>args.s2limits[0])*((focus_distance*depth)<args.s2limits[1]).int()
             # we only use focal stacks with a single image
             stacknum = 1
 
@@ -172,17 +182,19 @@ def train_model(loader):
                     k=sample_batch['kcam'][i].item()     
                     if(not args.aif):
                         X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*k*(focus_distance-f)
-                        # s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)/3.0
+                        s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)
 
             X2_fcs = X2_fcs.float().to(device_comp)
             s1_fcs = s1_fcs.float().to(device_comp)
 
             # Forward and compute loss
-            pred_depth,pred_blur,_=model(X,camind=args.camind,camparam=X2_fcs)
+            if(args.out_depth):
+                pred_depth,pred_blur,_=model(X,camind=args.camind,camparam=X2_fcs,foc_dist=s1_fcs)
+            else:
+                pred_depth,pred_blur,_=model(X,camind=args.camind,camparam=X2_fcs)
 
             blur_sum+=torch.sum(pred_blur[mask>0]).item()/torch.sum(mask)
-            norm_depth=util_func.normalize(depth)
-            depth_loss=criterion(pred_depth[mask>0], (depth)[mask>0])
+            depth_loss=criterion(pred_depth[mask>0], (depth/args.depthscale)[mask>0])
             #we don't train blur if input images are AiF
             if(args.aif):
                 blur_loss=0 
@@ -240,7 +252,7 @@ def train_model(loader):
             print('s1/depth MSE: '+str(valueMSE))
             print('blur loss = '+str(blurloss))
             print('mean blur = '+str(meanblur))
-            print('***********************')
+            print('**********************')
 
 def main():
     train_model(loaders[0])

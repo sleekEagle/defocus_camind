@@ -272,7 +272,7 @@ datapath='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\'
 def get_data_stats(datapath):
     loaders, total_steps = load_data(datapath,blur=1,aif=0,train_split=0.8,fstack=0,WORKERS_NUM=0,
     BATCH_SIZE=1,FOCUS_DIST=[0.1,.15,.3,0.7,1.5],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=1.0,dataset='defocusnet',
-    out_depth=True)
+    out_depth=False)
     print('stats of train data')
     get_loader_stats(loaders[0])
     print('______')

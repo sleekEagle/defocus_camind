@@ -26,6 +26,7 @@ class AENet(nn.Module):
 
     def __init__(self,in_dim,out_dim, num_filter, n_blocks=3, flag_step2=False):
         super(AENet, self).__init__()
+        print('defNet_arch3')
         
         self.in_dim = in_dim
         self.out_dim = out_dim
@@ -51,12 +52,13 @@ class AENet(nn.Module):
 
         self.conv_end = self.convblock(self.num_filter * 1, self.num_filter * 1, act_fnc)
 
-        self.conv_out = nn.Sequential(
+        self.conv_out_blur = nn.Sequential(
             nn.Conv2d(self.num_filter, self.out_dim, kernel_size=3, stride=1, padding=1),
+            #nn.LeakyReLU()
         )
 
         if flag_step2:
-            self.conv_down2_0 = self.convsblocks(1, self.num_filter * 1, act_fnc)
+            self.conv_down2_0 = self.convsblocks(2, self.num_filter * 1, act_fnc)
             self.pool2_0 = self.poolblock()
 
 
@@ -110,7 +112,7 @@ class AENet(nn.Module):
         return pool
 
 
-    def forward(self,x,inp=3,k=8,camind=True,flag_step2=True,camparam=0,foc_dist=0):
+    def forward(self,x,inp=3,k=1,camind=True,flag_step2=True,camparam=0,foc_dist=0):
         down1 = []
         pool_temp = []
         for j in range(self.n_blocks + 1):
@@ -163,12 +165,16 @@ class AENet(nn.Module):
                         unpool_all = torch.cat([unpool_all, unpool], dim=2)
                 else:
                     end = self.conv_end(joint)
-                    out_col = self.conv_out(end)
+                    out_col_blur = self.conv_out_blur(end)
 
                     if i == 0:
-                        out=out_col
+                        out_blur = out_col_blur
                     else:
-                        out = torch.cat([out, out_col], dim=1)
+                        out_blur = torch.cat([out_blur, out_col_blur], dim=1)
+        if(camind):
+            mul=out_blur*camparam
+        else:
+            mul=out_blur
 
         if flag_step2:
             down2 = []
@@ -180,7 +186,7 @@ class AENet(nn.Module):
                         joint_pool = torch.cat([pool_temp[0], pool_max[0]], dim=1)
                         pool_temp.pop(0)
                     else:
-                        joint_pool =  torch.cat([out[:, 1 * i:1 * (i + 1), :, :]], dim=1)
+                        joint_pool =  torch.cat([mul[:, 1 * i:1 * (i + 1), :, :],foc_dist[:, 1 * i:1 * (i + 1), :, :]], dim=1)
                     conv = self.__getattr__('conv_down2_' + str(j + 0))(joint_pool)
                     down_temp.append(conv)
 
@@ -227,6 +233,6 @@ class AENet(nn.Module):
             out_step2 = self.conv_out2(end2)
         
         if flag_step2:
-            return out_step2, out
+            return out_step2, out_blur,mul
         else:
-            return out
+            return out_blur,mul

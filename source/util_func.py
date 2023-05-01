@@ -162,7 +162,10 @@ def eval(model,loader,args,device_comp,kcam=0,f=0,calc_distmse=False):
             focus_distance=focus_distance.to(device_comp)
 
         if(len(args.s2limits)==2):
-            mask=((depth*focus_distance)>args.s2limits[0])*((depth*focus_distance)<args.s2limits[1]).int()
+            if(args.out_depth==True):
+                 mask=(depth>args.s2limits[0])*(depth<args.s2limits[1]).int()
+            else:
+                mask=((focus_distance*depth)>args.s2limits[0])*((focus_distance*depth)<args.s2limits[1]).int()
             s=torch.sum(mask).item()
             #continue loop if there are no ground truth data in the range we are interested in
             if(s==0):
@@ -173,6 +176,8 @@ def eval(model,loader,args,device_comp,kcam=0,f=0,calc_distmse=False):
         
         stacknum = 1
         X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
+        s1_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
+        s1_fcs = s1_fcs.float().to(device_comp)
         for t in range(stacknum):
             #iterate through the batch
             for i in range(X.shape[0]):
@@ -185,13 +190,20 @@ def eval(model,loader,args,device_comp,kcam=0,f=0,calc_distmse=False):
                     # print('fd:'+str(fd))
                     if(not args.aif):
                         X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*k*(fd-f)
+                        s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)
                 elif(args.dataset=='ddff'):
                     fd=foc_dist[i].item()
                     if(not args.aif):
                         X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*kcam*(fd-f)
+                        s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)
         X2_fcs = X2_fcs.float().to(device_comp)
-        
-        pred_depth,pred_blur,corrected_blur=model(X,camind=args.camind,camparam=X2_fcs)
+        if(args.out_depth):
+                pred_depth,pred_blur,_=model(X,camind=args.camind,camparam=X2_fcs,foc_dist=s1_fcs)
+        else:
+            pred_depth,pred_blur,_=model(X,camind=args.camind,camparam=X2_fcs)
+
+        #scale the predictions back
+        pred_depth*=args.depthscale
         
         #gt_blur=torch.cat((gt_blur,torch.flatten(gt_step1.detach().cpu())))
         #pred_blur=torch.cat((pred_blur,torch.flatten(output_step1.detach().cpu())))
@@ -219,12 +231,12 @@ def eval(model,loader,args,device_comp,kcam=0,f=0,calc_distmse=False):
             meanblurmse+=blurmse
         #calculate MSE value
         if(args.out_depth):
-            mse=torch.mean(torch.square(pred_depth-depth)[mask>0]).item()
+            mse=torch.mean(torch.square(pred_depth*args.depthscale-depth)[mask>0]).item()
         else:
             mse=torch.mean(torch.square(focus_distance*pred_depth-focus_distance*depth)[mask>0]).item()
             mse2=torch.mean(torch.square(pred_depth-depth)[mask>0]).item()
+            meanMSE2+=mse2
         meanMSE+=mse
-        meanMSE2+=mse2
         c+=1
 
         if(calc_distmse):
