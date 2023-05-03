@@ -34,7 +34,7 @@ s2limits is
 [0.1,2.8] for defocusnet
 [0.7,10.0] for NYU 
 '''
-parser.add_argument('--s2limits', nargs='+', type=int, default=[0.71,10.0],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--s2limits', nargs="*", type=float, default=[0.71,10.0],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--dataset', default='nyu', help='data path')
 parser.add_argument('--datanum', default='8', help='dataset number. Only applicable for NYU depth dataset')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
