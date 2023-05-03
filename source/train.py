@@ -1,5 +1,5 @@
 import torch
-import torch.nn as nn
+import torch.nn as nn   
 import torch.optim as optim
 import torch.utils.data
 import numpy as np
@@ -14,9 +14,9 @@ from torch.optim.lr_scheduler import StepLR
 from pathlib import Path
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
-# parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders', help='blender data path')
-parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
-parser.add_argument('--bs', type=int,default=20, help='training batch size')
+parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders', help='blender data path')
+# parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
+parser.add_argument('--bs', type=int,default=12, help='training batch size')
 parser.add_argument('--epochs', type=int,default=10000, help='training batch size')
 parser.add_argument('--depthscale', type=float,default=1.,help='divide all depths by this value')
 '''
@@ -24,24 +24,22 @@ blurclip is
 6.5 for defocusnet
 75.5 for NYU
 '''
-parser.add_argument('--blurclip', type=float,default=7.0,help='Clip blur by this value : only applicable for camind model. Default=10')
+parser.add_argument('--blurclip', type=float,default=6.5,help='Clip blur by this value : only applicable for camind model. Default=10')
 parser.add_argument('--blurweight', type=float,default=1.0,help='weight for blur loss')
 parser.add_argument('--depthweight', type=float,default=1.0,help='weight for blur loss')
-# parser.add_argument('--checkpt', default=None, help='path to the saved model')
-parser.add_argument('--savepath', default='C:\\Users\\lahir\\code\\defocus\\models', help='path to the saved model')
-# parser.add_argument('--checkpt', default='C:\\Users\\lahir\\code\\defocus\\models\\camind_defocusnet_15.0_blurclip6.5_blurweight1.0\\model.pth', help='path to the saved model')
+parser.add_argument('--savepath', default='C:\\Users\\lahir\\code\\defocus\\models\\', help='path to the saved model')
 parser.add_argument('--checkpt', default=None, help='path to the saved model')
 '''
 s2limits is
 [0.1,2.8] for defocusnet
 [0.7,10.0] for NYU 
 '''
-parser.add_argument('--s2limits', nargs='+', default=[0,3],  help='the interval of depth where the errors are calculated')
-parser.add_argument('--dataset', default='defocusnet', help='data path')
-parser.add_argument('--datanum', default='4', help='dataset number. Only applicable for NYU depth')
+parser.add_argument('--s2limits', nargs='+', type=int, default=[0.71,10.0],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--dataset', default='nyu', help='data path')
+parser.add_argument('--datanum', default='8', help='dataset number. Only applicable for NYU depth dataset')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
-parser.add_argument('--out_depth', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
+parser.add_argument('--out_depth', type=bool,default=False, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--lr',type=float, default=0.0001,help='dilvide all depths by this value')
 args = parser.parse_args()
 
@@ -102,7 +100,7 @@ elif(args.dataset=='defocusnet'):
 elif(args.dataset=='nyu'):
     datanum=args.datanum
     loaders, total_steps = NYU_blurred.load_data(datapath=args.datapath,datanum=datanum,blur=1,fstack=0,WORKERS_NUM=0,
-            BATCH_SIZE=20)
+            BATCH_SIZE=20,out_depth=args.out_depth)
 
 # ============ init ===============
 torch.manual_seed(2023)
