@@ -259,10 +259,10 @@ blur mean=6.4919104153118425
 
 
 def get_data_stats():
-    datanum="4"
+    datanum="8"
     datapath="C:\\Users\\lahir\\data\\nyu_depth\\noborders\\"
-    loaders, total_steps = load_data(datapath=datapath,datanum=datanum,blur=1,fstack=0,WORKERS_NUM=0,
-            BATCH_SIZE=20)
+    loaders, total_steps=load_data(datapath=datapath,datanum=datanum,blur=1,fstack=0,WORKERS_NUM=0,
+            BATCH_SIZE=1,out_depth=False)
     print('stats of train data')
     depthlist=get_loader_stats(loaders[0])
     #plot histogram of GT depths

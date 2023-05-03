@@ -198,9 +198,9 @@ def eval(model,loader,args,device_comp,kcam=0,f=0,calc_distmse=False):
                         s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)
         X2_fcs = X2_fcs.float().to(device_comp)
         if(args.out_depth):
-                pred_depth,pred_blur,_=model(X,camind=args.camind,camparam=X2_fcs,foc_dist=s1_fcs)
+                pred_depth,pred_blur,corrected_blur=model(X,camind=args.camind,camparam=X2_fcs,foc_dist=s1_fcs)
         else:
-            pred_depth,pred_blur,_=model(X,camind=args.camind,camparam=X2_fcs)
+            pred_depth,pred_blur,corrected_blur=model(X,camind=args.camind,camparam=X2_fcs)
 
         #scale the predictions back
         pred_depth*=args.depthscale

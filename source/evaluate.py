@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
 from torchvision import transforms, utils
-from arch import dofNet_arch3
+from arch import dofNet_arch3,dofNet_arch4
 
 import numpy as np
 import importlib
@@ -13,26 +13,22 @@ import argparse
 from dataloaders import DDFF12,focalblender,NYU_blurred
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
-parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
-# parser.add_argument('--blenderpth', default="C:\\Users\\lahir\\focalstacks\\datasets\\medium_f_test\\", help='blender data path')
+# parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
+# parser.add_argument('--datapath', default="C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1-10_test_remapped\\", help='blender data path')
 # parser.add_argument('--datapath', default="C://Users//lahir//focalstacks//datasets//mediumN1//", help='blender data path')
-# parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\', help='blender data path')
+parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\', help='blender data path')
 parser.add_argument('--kcamfile', default=None, help='blender data path')
 parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
-parser.add_argument('--dataset', default='defocusnet', help='dataset name')
-parser.add_argument('--datanum', default='8', help='dataset number. Only applicable for NYU depth')
+parser.add_argument('--dataset', default='nyu', help='dataset name')
+parser.add_argument('--datanum', default='5', help='dataset number. Only applicable for NYU depth')
 parser.add_argument('--bs', type=int,default=1, help='training batch size')
-parser.add_argument('--depthscale', type=float,default=1.,help='divide all depths by this value')
-parser.add_argument('--checkpt', default='C:\\Users\\lahir\\code\\defocus\\models\\camind_defocusnet_1.0_blurclip7.0_blurweight1.0\\149.pth', help='path to the saved model')
-#parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_norelu_N1_1.9_f1.9_blurclip8.0_blurweight1.0\\a03_expcamind_norelu_N1_1.9_f1.9_blurclip8.0_blurweight1.0_ep0.pth', help='path to the saved model')
-#parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a04_expaif_N1_d_1.9\\a04_expaif_N1_d_1.9_ep0.pth', help='path to the saved model')
-#parser.add_argument('--savedmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3\\a03_expcamind_fdistmul_N1_d_1.9_f1.9_blurclip8.0_blurweight0.3_ep0.pth', help='path to the saved model')
-parser.add_argument('--s2limits', nargs='+', default=[0.1,3.0],  help='the interval of depth where the errors are calculated')
-parser.add_argument('--blurclip', type=float,default=7.0,help='Clip blur by this value : only applicable for camind model. Default=10')
+parser.add_argument('--depthscale', type=float,default=28.,help='divide all depths by this value')
+parser.add_argument('--checkpt', default='C:\\Users\\lahir\\models\\camind\\nyu.pth', help='path to the saved model')
+parser.add_argument('--s2limits', nargs='+', default=[0.71,10.0],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--blurclip', type=float,default=6.5,help='Clip blur by this value : only applicable for camind model. Default=10')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
-parser.add_argument('--out_depth', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
-
+parser.add_argument('--out_depth', type=bool,default=False, help='True: use camera independent model. False: use defocusnet model')
 args = parser.parse_args()
 
 '''
@@ -41,11 +37,18 @@ load model
 #GPU or CPU
 device_comp = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-ch_inp_num = 3
-ch_out_num = 1
-model = dofNet_arch3.AENet(ch_inp_num, 1, 16, flag_step2=True)
-model = model.to(device_comp)
-model_params = model.parameters()
+if(args.out_depth):
+    ch_inp_num = 3
+    ch_out_num = 1
+    model = dofNet_arch4.AENet(ch_inp_num, 1, 16, flag_step2=True)
+    model = model.to(device_comp)
+    model_params = model.parameters()
+else:
+    ch_inp_num = 3
+    ch_out_num = 1
+    model = dofNet_arch3.AENet(ch_inp_num, 1, 16, flag_step2=True)
+    model = model.to(device_comp)
+    model_params = model.parameters()
 
 # loading weights of the first step
 if args.checkpt:
@@ -64,12 +67,12 @@ if args.checkpt:
 if(args.dataset=='blender'):
     print('eval blender')
     if(args.kcamfile):
-        kcampath=args.blenderpth+args.kcamfile
+        kcampath=args.datapath+args.kcamfile
     else:
         kcampath=None
     loaders, total_steps = focalblender.load_data(args.datapath,blur=1,aif=0,train_split=1.0,fstack=0,WORKERS_NUM=0,
     BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=1.0,dataset=args.dataset,
-    out_depth=args.out_depth)
+    out_depth=args.out_depth,kcampath=kcampath)
 elif(args.dataset=='ddff'):
     DDFF12_train = DDFF12.DDFF12Loader(args.ddffpth, stack_key="stack_train", disp_key="disp_train", n_stack=10,
                                 min_disp=0.02, max_disp=0.28,fstack=0,idx_req=[9])
@@ -90,7 +93,7 @@ elif(args.dataset=='nyu'):
     print('Getting NUY data...')
     datanum=args.datanum
     loaders, total_steps = NYU_blurred.load_data(datapath=args.datapath,datanum=datanum,blur=1,fstack=0,WORKERS_NUM=0,
-            BATCH_SIZE=1)
+            BATCH_SIZE=1,out_depth=args.out_depth)
 def main():
     if(args.dataset=='blender'):  
         print('evaluating on blender')         
