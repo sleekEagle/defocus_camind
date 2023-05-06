@@ -81,63 +81,40 @@ class ImageDataset(torch.utils.data.Dataset):
     # imgp=rgbpath/"1261.png"
     # cv2.imread(str(imgp),cv2.IMREAD_UNCHANGED)
 
-    def __init__(self,datapath,datanum,idx,transform_fnc=None,blur=1,aif=0,fstack=0, max_dpt=1.,blurclip=1.,
-                 out_depth=False):
-        p=Path(datapath)
-
-        self.rgbpath=p/("refocused"+str(datanum))
-        self.depthpath=p/"depth"
-        camparampath=p/("refocused"+str(datanum))/"camparam.txt"
+    def __init__(self,rgb_list,dpt_list,transform_fnc=None,blur=1,aif=0, max_dpt=1.,blurclip=1.,
+                 out_depth=False,f=3e-3,s1=2.0,kcam=1.4):
 
         self.transform_fnc = transform_fnc
-
         self.blur=blur
         self.aif=aif
-        self.fstack=fstack
         self.blurclip=blurclip
         self.out_depth=out_depth
-        if(camparampath):
-            self.kcamdict=read_kcamfile(camparampath)
-            #calculate kcam based on parameters in file
-            N=self.kcamdict['N']
-            self.f=self.kcamdict['f']
-            px=self.kcamdict['px']
-            self.s1=self.kcamdict['focus']
-            self.kcam=1/(self.f**2/N/px)
-            print('kcam:'+str(self.kcam))
-            print('f:'+str(self.f))
-
-        ##### Load and sort all images
-        self.imglist_rgb = [f for f in listdir(self.rgbpath) if (isfile(join(self.rgbpath, f)) and f[-4:] == ".png" and int(f[:-4]) in idx)]
-        self.imglist_dpt = [f for f in listdir(self.depthpath) if (isfile(join(self.depthpath, f)) and f[-4:] == ".png" and int(f[:-4]) in idx)]
-
-        print("Total number of samples", len(self.imglist_dpt), "  Total number of seqs", len(self.imglist_dpt))
-
-        self.imglist_rgb.sort()
-        self.imglist_dpt.sort()
-
         self.max_dpt = max_dpt
+        self.rgb_list=rgb_list
+        self.dpt_list=dpt_list
+        self.s1=s1
+        self.f=f
+        self.kcam=kcam
+
 
     def __len__(self):
-        return int(len(self.imglist_dpt))
+        return int(len(self.rgb_list))
 
     def __getitem__(self, idx):
         fdist=np.zeros((0))
 
         ##### Read and process an image
         #read depth image
-        img_dpt = cv2.imread(str(self.depthpath/self.imglist_dpt[idx]),cv2.IMREAD_UNCHANGED)
+        img_dpt = cv2.imread(str(self.dpt_list[idx]),cv2.IMREAD_UNCHANGED)
         #convert from mm to m
         img_dpt=img_dpt/1000.
-        #img_dpt_scaled = np.clip(img_dpt, 0., 1.9)
-        #mat_dpt_scaled = img_dpt_scaled / 1.9
         mat_dpt_scaled = img_dpt/self.max_dpt
         mat_dpt = mat_dpt_scaled.copy()[:, :, np.newaxis]
         if(not self.out_depth):
             mat_dpt = mat_dpt/self.s1
 
         #read rgb image
-        im = cv2.imread(str(self.rgbpath/self.imglist_rgb[idx]),cv2.IMREAD_UNCHANGED)
+        im = cv2.imread(str(self.rgb_list[idx]),cv2.IMREAD_UNCHANGED)
         img_rgb = np.array(im)
         mat_rgb = img_rgb.copy() / 255.
             
@@ -166,7 +143,7 @@ datapath='C:\\Users\\lahir\\data\\DSLR\\dfd_indoor\\dfd_dataset_indoor_N2_8\\'
 #how many images are used to train the model
 train_n=10
 
-def load_data(datapath,datanum, blur,fstack,
+def load_data(datapath,train_n,blur,
               WORKERS_NUM, BATCH_SIZE, MAX_DPT=1.,blurclip=1.,out_depth=False):
     
     #reading splits
@@ -177,10 +154,10 @@ def load_data(datapath,datanum, blur,fstack,
     test_rgb=p/"rgb"/"test"
 
     #get all files
-    rgb1 = [f for f in listdir(train_rgb) if (isfile(join(train_rgb, f)) and f[-4:] == ".JPG")]
-    rgb2 = [f for f in listdir(test_rgb) if (isfile(join(test_rgb, f)) and f[-4:] == ".JPG")]
-    dpt1 = [f for f in listdir(train_depth) if (isfile(join(train_depth, f)) and f[-4:] == ".png")]
-    dpt2 = [f for f in listdir(test_depth) if (isfile(join(test_depth, f)) and f[-4:] == ".png")]
+    rgb1 = [train_rgb/f for f in listdir(train_rgb) if (isfile(join(train_rgb, f)) and f[-4:] == ".JPG")]
+    rgb2 = [test_rgb/f for f in listdir(test_rgb) if (isfile(join(test_rgb, f)) and f[-4:] == ".JPG")]
+    dpt1 = [train_depth/f for f in listdir(train_depth) if (isfile(join(train_depth, f)) and f[-4:] == ".png")]
+    dpt2 = [test_depth/f for f in listdir(test_depth) if (isfile(join(test_depth, f)) and f[-4:] == ".png")]
     rgb1.sort()
     rgb2.sort()
     dpt1.sort()
@@ -201,23 +178,23 @@ def load_data(datapath,datanum, blur,fstack,
         Transform(),
         transforms.RandomCrop((256,256)),
         ])
-    train_dataset = ImageDataset(rgbls,dptls,blur=blur,transform_fnc=tr_train,
-                               fstack=fstack, max_dpt=MAX_DPT,
+    train_dataset = ImageDataset(rgb_train,dpt_train,blur=blur,transform_fnc=tr_train,
+                               max_dpt=MAX_DPT,
                                blurclip=blurclip,out_depth=out_depth)
     
-    test_dataset = ImageDataset(datapath,datanum,test_idx,blur=blur,transform_fnc=tr_test,
-                               fstack=fstack, max_dpt=MAX_DPT,
-                               blurclip=blurclip,out_depth=out_depth)
+    # test_dataset = ImageDataset(datapath,datanum,test_idx,blur=blur,transform_fnc=tr_test,
+    #                            fstack=fstack, max_dpt=MAX_DPT,
+    #                            blurclip=blurclip,out_depth=out_depth)
 
     loader_train = torch.utils.data.DataLoader(dataset=train_dataset, num_workers=WORKERS_NUM, batch_size=BATCH_SIZE, shuffle=True)
-    loader_valid = torch.utils.data.DataLoader(dataset=test_dataset, num_workers=1, batch_size=1, shuffle=False)
+    # loader_valid = torch.utils.data.DataLoader(dataset=test_dataset, num_workers=1, batch_size=1, shuffle=False)
 
-    total_steps = int(len(train_dataset) / BATCH_SIZE)
-    print("Total number of steps per epoch:", total_steps)
-    print("Total number of training sample:", len(train_dataset))
-    print("Total number of validataion sample:", len(test_dataset))
+    # total_steps = int(len(train_dataset) / BATCH_SIZE)
+    # print("Total number of steps per epoch:", total_steps)
+    # print("Total number of training sample:", len(train_dataset))
+    # print("Total number of validataion sample:", len(test_dataset))
 
-    return [loader_train, loader_valid], total_steps
+    return [loader_train,0]
 
 
 # depthpath='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\'
@@ -260,33 +237,31 @@ def load_data(datapath,datanum, blur,fstack,
 '''
 X min=0.0
 X max=1.0
-X mean=0.39910310504313146
-depth min=0.7129999995231628
-depth max=9.98900032043457
-depth mean=2.9440300959878383
+X mean=0.49368787379046664
+depth min=0.24500000476837158
+depth max=8.345999717712402
+depth mean=2.831630492210388
 blur min=0.0
-blur max=33.832828521728516
-blur mean=6.4919104153118425
+blur max=2.562152147293091
+blur mean=0.17454538345336915
 '''
 
 
 def get_data_stats():
-    datanum="8"
-    datapath="C:\\Users\\lahir\\data\\nyu_depth\\noborders\\"
-    loaders, total_steps=load_data(datapath=datapath,datanum=datanum,blur=1,fstack=0,WORKERS_NUM=0,
-            BATCH_SIZE=1,out_depth=False)
+    loaders=load_data(datapath=datapath,train_n=train_n,blur=1,WORKERS_NUM=0,
+            BATCH_SIZE=1,out_depth=True)
     print('stats of train data')
     depthlist=get_loader_stats(loaders[0])
     #plot histogram of GT depths
     depthlist=depthlist.numpy()
     _ = plt.hist(depthlist, bins='auto') 
-    plt.title('Depth stats of NYU dataset. min='+str(min(depthlist))+' max='+str(max(depthlist))+' mean='+str(np.mean(depthlist)))
+    plt.title('Depth stats of DSLR dataset. min='+str(min(depthlist))+' max='+str(max(depthlist))+' mean='+str(np.mean(depthlist)))
     plt.show()
     print('______')
 
 #data statistics of the input images
 def get_loader_stats(loader):
-    print('getting NUY stats...')
+    print('getting DSLR stats...')
     xmin,xmax,xmean,count=100,0,0,0
     depthmin,depthmax,depthmean=100,0,0
     blurmin,blurmax,blurmean=100,0,0
