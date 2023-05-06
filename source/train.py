@@ -39,7 +39,7 @@ parser.add_argument('--dataset', default='defocusnet', help='data path')
 parser.add_argument('--datanum', default='8', help='dataset number. Only applicable for NYU depth dataset')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
-parser.add_argument('--out_depth', type=bool,default=False, help='True: use camera independent model. False: use defocusnet model')
+parser.add_argument('--out_depth', type=int,default=0, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--lr',type=float, default=0.0001,help='dilvide all depths by this value')
 args = parser.parse_args()
 
@@ -60,13 +60,14 @@ load model
 #GPU or CPU
 device_comp = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-if(args.out_depth):
+if(args.out_depth==1):
     ch_inp_num = 3
     ch_out_num = 1
     model = dofNet_arch4.AENet(ch_inp_num, 1, 16, flag_step2=True)
     model = model.to(device_comp)
     model_params = model.parameters()
-else:
+elif(args.out_depth==0):
+    print('no deth*************')
     ch_inp_num = 3
     ch_out_num = 1
     model = dofNet_arch3.AENet(ch_inp_num, 1, 16, flag_step2=True)
@@ -155,7 +156,7 @@ def train_model(loader):
             focus_distance=focus_distance.to(device_comp)
                 
             optimizer.zero_grad()
-            if(args.out_depth==True):
+            if(args.out_depth==1):
                  mask=(depth>args.s2limits[0])*(depth<args.s2limits[1]).int()
             else:  
                 mask=((focus_distance*depth)>args.s2limits[0])*((focus_distance*depth)<args.s2limits[1]).int()
@@ -185,7 +186,7 @@ def train_model(loader):
             s1_fcs = s1_fcs.float().to(device_comp)
 
             # Forward and compute loss
-            if(args.out_depth):
+            if(args.out_depth==1):
                 pred_depth,pred_blur,_=model(X,camind=args.camind,camparam=X2_fcs,foc_dist=s1_fcs)
             else:
                 pred_depth,pred_blur,_=model(X,camind=args.camind,camparam=X2_fcs)

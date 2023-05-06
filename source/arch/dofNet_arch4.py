@@ -26,7 +26,7 @@ class AENet(nn.Module):
 
     def __init__(self,in_dim,out_dim, num_filter, n_blocks=3, flag_step2=False):
         super(AENet, self).__init__()
-        print('defNet_arch3')
+        print('defNet_arch4')
         
         self.in_dim = in_dim
         self.out_dim = out_dim
