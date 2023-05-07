@@ -15,20 +15,20 @@ from dataloaders import DDFF12,focalblender,NYU_blurred
 parser = argparse.ArgumentParser(description='camIndDefocus')
 # parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
 # parser.add_argument('--datapath', default="C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1-10_test_remapped\\", help='blender data path')
-# parser.add_argument('--datapath', default="C://Users//lahir//focalstacks//datasets//mediumN1//", help='blender data path')
-parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\', help='blender data path')
+parser.add_argument('--datapath', default="C://Users//lahir//focalstacks//datasets//mediumN1//", help='blender data path')
+# parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\', help='blender data path')
 parser.add_argument('--kcamfile', default=None, help='blender data path')
-parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
-parser.add_argument('--dataset', default='nyu', help='dataset name')
+# parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
+parser.add_argument('--dataset', default='blender', help='dataset name')
 parser.add_argument('--datanum', default='5', help='dataset number. Only applicable for NYU depth')
 parser.add_argument('--bs', type=int,default=1, help='training batch size')
-parser.add_argument('--depthscale', type=float,default=28.,help='divide all depths by this value')
-parser.add_argument('--checkpt', default='C:\\Users\\lahir\\models\\camind\\nyu.pth', help='path to the saved model')
-parser.add_argument('--s2limits', nargs='+', default=[0.71,10.0],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--depthscale', type=float,default=1.,help='divide all depths by this value')
+parser.add_argument('--checkpt', default='C:\\Users\\lahir\\models\\camind\\camind_defocusnet_1.0_blurclip6.5_blurweight1.0\\39.pth', help='path to the saved model')
+parser.add_argument('--s2limits', nargs='+', default=[0.1,1.0],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--blurclip', type=float,default=6.5,help='Clip blur by this value : only applicable for camind model. Default=10')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
-parser.add_argument('--out_depth', type=bool,default=False, help='True: use camera independent model. False: use defocusnet model')
+parser.add_argument('--out_depth', type=int,default=1, help='True: use camera independent model. False: use defocusnet model')
 args = parser.parse_args()
 
 '''
@@ -37,13 +37,13 @@ load model
 #GPU or CPU
 device_comp = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-if(args.out_depth):
+if(args.out_depth==1):
     ch_inp_num = 3
     ch_out_num = 1
     model = dofNet_arch4.AENet(ch_inp_num, 1, 16, flag_step2=True)
     model = model.to(device_comp)
     model_params = model.parameters()
-else:
+elif(args.out_depth==0):
     ch_inp_num = 3
     ch_out_num = 1
     model = dofNet_arch3.AENet(ch_inp_num, 1, 16, flag_step2=True)
@@ -95,8 +95,8 @@ elif(args.dataset=='nyu'):
     loaders, total_steps = NYU_blurred.load_data(datapath=args.datapath,datanum=datanum,blur=1,fstack=0,WORKERS_NUM=0,
             BATCH_SIZE=1,out_depth=args.out_depth)
 def main():
-    if(args.dataset=='blender'):  
-        print('evaluating on blender')         
+    if(args.dataset=='blender' or args.dataset=='defocusnet'):  
+        print('evaluating on blender or defocusnet')         
         depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[0],args,device_comp,calc_distmse=True)
         # util_func.kcamwise_blur(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,camind=args.camind,aif=args.aif)
     elif(args.dataset=='defocusnet'):
