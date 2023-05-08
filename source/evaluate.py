@@ -15,15 +15,15 @@ from dataloaders import DDFF12,focalblender,NYU_blurred
 parser = argparse.ArgumentParser(description='camIndDefocus')
 # parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
 # parser.add_argument('--datapath', default="C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1-10_test_remapped\\", help='blender data path')
-parser.add_argument('--datapath', default="C://Users//lahir//focalstacks//datasets//mediumN1//", help='blender data path')
-# parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\', help='blender data path')
+# parser.add_argument('--datapath', default="C://Users//lahir//focalstacks//datasets//mediumN1//", help='blender data path')
+parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\', help='blender data path')
 parser.add_argument('--kcamfile', default=None, help='blender data path')
 # parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
-parser.add_argument('--dataset', default='blender', help='dataset name')
-parser.add_argument('--datanum', default='5', help='dataset number. Only applicable for NYU depth')
+parser.add_argument('--dataset', default='nyu', help='dataset name')
+parser.add_argument('--datanum', default='8', help='dataset number. Only applicable for NYU depth')
 parser.add_argument('--bs', type=int,default=1, help='training batch size')
 parser.add_argument('--depthscale', type=float,default=15.,help='divide all depths by this value')
-parser.add_argument('--checkpt', default='C:\\Users\\lahir\\models\\camind\\blender\\nodepth.pth', help='path to the saved model')
+parser.add_argument('--checkpt', default='C:\\Users\\lahir\\models\\camind\\blender\\19.pth', help='path to the saved model')
 parser.add_argument('--s2limits', nargs='+', default=[0.1,3.0],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--blurclip', type=float,default=6.5,help='Clip blur by this value : only applicable for camind model. Default=10')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
@@ -72,7 +72,7 @@ if(args.dataset=='blender'):
         kcampath=None
     loaders, total_steps = focalblender.load_data(args.datapath,blur=1,aif=args.aif,train_split=0.8,fstack=0,WORKERS_NUM=0,
     BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,
-    blurclip=args.blurclip,dataset=args.dataset)
+    blurclip=args.blurclip,dataset=args.dataset,out_depth=args.out_depth)
 elif(args.dataset=='ddff'):
     DDFF12_train = DDFF12.DDFF12Loader(args.ddffpth, stack_key="stack_train", disp_key="disp_train", n_stack=10,
                                 min_disp=0.02, max_disp=0.28,fstack=0,idx_req=[9])
@@ -93,9 +93,9 @@ elif(args.dataset=='nyu'):
     print('Getting NUY data...')
     datanum=args.datanum
     loaders, total_steps = NYU_blurred.load_data(datapath=args.datapath,datanum=datanum,blur=1,fstack=0,WORKERS_NUM=0,
-            BATCH_SIZE=1,out_depth=args.out_depth)
+            BATCH_SIZE=1,blurclip=args.blurclip,out_depth=args.out_depth)
 def main():
-    if(args.dataset=='blender' or args.dataset=='defocusnet'):  
+    if(args.dataset=='blender' or args.dataset=='defocusnet' or args.dataset=='nyu'):  
         print('evaluating on blender or defocusnet')         
         depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[1],args,device_comp,calc_distmse=True)
         # util_func.kcamwise_blur(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,camind=args.camind,aif=args.aif)
@@ -109,10 +109,7 @@ def main():
             depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(TrainImgLoader,model_info,args.depthscale,args.fscale,args.s2limits,
             dataset=args.dataset,camind=args.camind,aif=args.aif,kcam=kcam,f=9.5e-3)
             print('MSE:%2.4f'%(s2loss2))
-    elif(args.dataset=='nyu'):  
-        print('evaluating on NYU')         
-        depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[1],args,device_comp,calc_distmse=True)
-      
+       
     print('s2 loss2: MSE: '+str(depthMSE)+" RMSE:"+str(depthMSE**0.5))
     print('blur loss = '+str(blurloss))
     print('mean blur = '+str(meanblur))  

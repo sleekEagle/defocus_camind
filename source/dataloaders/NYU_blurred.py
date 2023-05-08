@@ -171,7 +171,7 @@ class Transform(object):
         return image
     
 def load_data(datapath,datanum, blur,fstack,
-              WORKERS_NUM, BATCH_SIZE, MAX_DPT=1.,blurclip=1.,out_depth=False):
+              WORKERS_NUM, BATCH_SIZE, MAX_DPT=1.,blurclip=1.,out_depth=True):
     
     #reading splits
     p=Path(datapath)
