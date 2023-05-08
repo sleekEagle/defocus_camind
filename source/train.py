@@ -16,7 +16,7 @@ from pathlib import Path
 parser = argparse.ArgumentParser(description='camIndDefocus')
 parser.add_argument('--datapath', default="C://Users//lahir//focalstacks//datasets//mediumN1//", help='blender data path')
 # parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
-parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\', help='blender data path')
+# parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\', help='blender data path')
 parser.add_argument('--bs', type=int,default=12, help='training batch size')
 parser.add_argument('--epochs', type=int,default=10000, help='training batch size')
 parser.add_argument('--depthscale', type=float,default=15.,help='divide all depths by this value')
