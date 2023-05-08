@@ -16,9 +16,10 @@ from pathlib import Path
 parser = argparse.ArgumentParser(description='camIndDefocus')
 parser.add_argument('--datapath', default="C://Users//lahir//focalstacks//datasets//mediumN1//", help='blender data path')
 # parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
+parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\', help='blender data path')
 parser.add_argument('--bs', type=int,default=12, help='training batch size')
 parser.add_argument('--epochs', type=int,default=10000, help='training batch size')
-parser.add_argument('--depthscale', type=float,default=1.,help='divide all depths by this value')
+parser.add_argument('--depthscale', type=float,default=15.,help='divide all depths by this value')
 '''
 blurclip is
 6.5 for defocusnet
@@ -39,7 +40,7 @@ parser.add_argument('--dataset', default='blender', help='data path')
 parser.add_argument('--datanum', default='8', help='dataset number. Only applicable for NYU depth dataset')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
-parser.add_argument('--out_depth', type=int,default=1, help='True: use camera independent model. False: use defocusnet model')
+parser.add_argument('--out_depth', type=int,default=0, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--lr',type=float, default=0.0001,help='dilvide all depths by this value')
 args = parser.parse_args()
 
@@ -103,7 +104,7 @@ elif(args.dataset=='nyu'):
     print('Getting NYU data...')
     datanum=args.datanum
     loaders, total_steps = NYU_blurred.load_data(datapath=args.datapath,datanum=datanum,blur=1,fstack=0,WORKERS_NUM=0,
-            BATCH_SIZE=20,out_depth=args.out_depth)
+            BATCH_SIZE=20,blurclip=args.blurclip,out_depth=args.out_depth)
 
 # ============ init ===============
 torch.manual_seed(2023)
