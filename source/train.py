@@ -18,7 +18,7 @@ parser.add_argument('--datapath', default="C://Users//lahir//focalstacks//datase
 # parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
 parser.add_argument('--bs', type=int,default=12, help='training batch size')
 parser.add_argument('--epochs', type=int,default=10000, help='training batch size')
-parser.add_argument('--depthscale', type=float,default=1.,help='divide all depths by this value')
+parser.add_argument('--depthscale', type=float,default=15.,help='divide all depths by this value')
 '''
 blurclip is
 6.5 for defocusnet
@@ -28,7 +28,7 @@ parser.add_argument('--blurclip', type=float,default=6.5,help='Clip blur by this
 parser.add_argument('--blurweight', type=float,default=1.0,help='weight for blur loss')
 parser.add_argument('--depthweight', type=float,default=1.0,help='weight for blur loss')
 parser.add_argument('--savepath', default='C:\\Users\\lahir\\models\\camind\\', help='path to the saved model')
-parser.add_argument('--checkpt', default=None, help='path to the saved model')
+parser.add_argument('--checkpt', default='C:\\Users\\lahir\\models\\camind\\blender\\nod_local.pth', help='path to the saved model')
 '''
 s2limits is
 [0.1,2.8] for defocusnet
@@ -39,7 +39,7 @@ parser.add_argument('--dataset', default='blender', help='data path')
 parser.add_argument('--datanum', default='8', help='dataset number. Only applicable for NYU depth dataset')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
-parser.add_argument('--out_depth', type=int,default=1, help='True: use camera independent model. False: use defocusnet model')
+parser.add_argument('--out_depth', type=int,default=0, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--lr',type=float, default=0.0001,help='dilvide all depths by this value')
 args = parser.parse_args()
 
@@ -90,14 +90,17 @@ Load data
 '''
  # Training initializations
 if(args.dataset=='blender'):
+    print('Getting blender data...')
     loaders, total_steps = focalblender.load_data(args.datapath,blur=1,aif=args.aif,train_split=0.8,fstack=0,WORKERS_NUM=0,
     BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,
     blurclip=args.blurclip,dataset=args.dataset)
 elif(args.dataset=='defocusnet'):
+    print('Getting defocusnet data...')
     loaders, total_steps = focalblender.load_data(args.datapath,blur=1,aif=0,train_split=0.8,fstack=0,WORKERS_NUM=0,
     BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=1.0,dataset=args.dataset,
     out_depth=args.out_depth)
 elif(args.dataset=='nyu'):
+    print('Getting NYU data...')
     datanum=args.datanum
     loaders, total_steps = NYU_blurred.load_data(datapath=args.datapath,datanum=datanum,blur=1,fstack=0,WORKERS_NUM=0,
             BATCH_SIZE=20,out_depth=args.out_depth)

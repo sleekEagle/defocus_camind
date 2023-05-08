@@ -22,13 +22,13 @@ parser.add_argument('--kcamfile', default=None, help='blender data path')
 parser.add_argument('--dataset', default='blender', help='dataset name')
 parser.add_argument('--datanum', default='5', help='dataset number. Only applicable for NYU depth')
 parser.add_argument('--bs', type=int,default=1, help='training batch size')
-parser.add_argument('--depthscale', type=float,default=1.,help='divide all depths by this value')
-parser.add_argument('--checkpt', default='C:\\Users\\lahir\\models\\camind\\camind_blender_bs_12_depth_1\\9.pth', help='path to the saved model')
+parser.add_argument('--depthscale', type=float,default=15.,help='divide all depths by this value')
+parser.add_argument('--checkpt', default='C:\\Users\\lahir\\models\\camind\\blender\\nodepth.pth', help='path to the saved model')
 parser.add_argument('--s2limits', nargs='+', default=[0.1,3.0],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--blurclip', type=float,default=6.5,help='Clip blur by this value : only applicable for camind model. Default=10')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
-parser.add_argument('--out_depth', type=int,default=1, help='True: use camera independent model. False: use defocusnet model')
+parser.add_argument('--out_depth', type=int,default=0, help='True: use camera independent model. False: use defocusnet model')
 args = parser.parse_args()
 
 '''
@@ -70,9 +70,9 @@ if(args.dataset=='blender'):
         kcampath=args.datapath+args.kcamfile
     else:
         kcampath=None
-    loaders, total_steps = focalblender.load_data(args.datapath,blur=1,aif=0,train_split=1.0,fstack=0,WORKERS_NUM=0,
-    BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,blurclip=1.0,dataset=args.dataset,
-    out_depth=args.out_depth,kcampath=kcampath)
+    loaders, total_steps = focalblender.load_data(args.datapath,blur=1,aif=args.aif,train_split=0.8,fstack=0,WORKERS_NUM=0,
+    BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,
+    blurclip=args.blurclip,dataset=args.dataset)
 elif(args.dataset=='ddff'):
     DDFF12_train = DDFF12.DDFF12Loader(args.ddffpth, stack_key="stack_train", disp_key="disp_train", n_stack=10,
                                 min_disp=0.02, max_disp=0.28,fstack=0,idx_req=[9])
@@ -97,7 +97,7 @@ elif(args.dataset=='nyu'):
 def main():
     if(args.dataset=='blender' or args.dataset=='defocusnet'):  
         print('evaluating on blender or defocusnet')         
-        depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[0],args,device_comp,calc_distmse=True)
+        depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[1],args,device_comp,calc_distmse=True)
         # util_func.kcamwise_blur(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,camind=args.camind,aif=args.aif)
     elif(args.dataset=='defocusnet'):
         depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[1],args,device_comp,calc_distmse=True)
