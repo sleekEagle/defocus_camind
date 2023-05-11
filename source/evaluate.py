@@ -10,21 +10,22 @@ import numpy as np
 import importlib
 import util_func
 import argparse
-from dataloaders import DDFF12,focalblender,NYU_blurred
+from dataloaders import DDFF12,focalblender,NYU_blurred,DSLR
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
 # parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
 # parser.add_argument('--datapath', default="C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1-10_test_remapped\\", help='blender data path')
 # parser.add_argument('--datapath', default="C://Users//lahir//focalstacks//datasets//mediumN1//", help='blender data path')
+# parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\DSLR\\dfd_indoor\\dfd_dataset_indoor_N2_8\\', help='blender data path')
 parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\', help='blender data path')
-parser.add_argument('--kcamfile', default=None, help='blender data path')
+parser.add_argument('--kcamfile', default='kcams_gt.txt', help='blender data path')
 # parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
 parser.add_argument('--dataset', default='nyu', help='dataset name')
-parser.add_argument('--datanum', default='8', help='dataset number. Only applicable for NYU depth')
+parser.add_argument('--datanum', default='11', help='dataset number. Only applicable for NYU depth')
 parser.add_argument('--bs', type=int,default=1, help='training batch size')
 parser.add_argument('--depthscale', type=float,default=1.,help='divide all depths by this value')
-parser.add_argument('--checkpt', default='C:\\Users\\lahir\\models\\camind\\blender\\39.pth', help='path to the saved model')
-parser.add_argument('--s2limits', nargs='+', default=[0.1,3.0],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--checkpt', default='C:\\Users\\lahir\\models\\camind\\camind_nyu_bs_12_depth_1\\d0.5.pth', help='path to the saved model')
+parser.add_argument('--s2limits', nargs='+', default=[0.1,2.0],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--blurclip', type=float,default=6.5,help='Clip blur by this value : only applicable for camind model. Default=10')
 parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
@@ -72,7 +73,8 @@ if(args.dataset=='blender'):
         kcampath=None
     loaders, total_steps = focalblender.load_data(args.datapath,blur=1,aif=args.aif,train_split=0.8,fstack=0,WORKERS_NUM=0,
     BATCH_SIZE=args.bs,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0,1,2,3,4],MAX_DPT=1.0,
-    blurclip=args.blurclip,dataset=args.dataset,out_depth=args.out_depth)
+    blurclip=args.blurclip,dataset=args.dataset,out_depth=args.out_depth,
+    kcampath=kcampath)
 elif(args.dataset=='ddff'):
     DDFF12_train = DDFF12.DDFF12Loader(args.ddffpth, stack_key="stack_train", disp_key="disp_train", n_stack=10,
                                 min_disp=0.02, max_disp=0.28,fstack=0,idx_req=[9])
@@ -94,32 +96,101 @@ elif(args.dataset=='nyu'):
     datanum=args.datanum
     loaders, total_steps = NYU_blurred.load_data(datapath=args.datapath,datanum=datanum,blur=1,fstack=0,WORKERS_NUM=0,
             BATCH_SIZE=1,blurclip=args.blurclip,out_depth=args.out_depth)
-def main():
-    if(args.dataset=='blender' or args.dataset=='defocusnet' or args.dataset=='nyu'):  
-        print('evaluating on blender or defocusnet')         
-        depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[1],args,device_comp,calc_distmse=True)
-        # util_func.kcamwise_blur(loaders[0],model_info,args.depthscale,args.fscale,args.s2limits,camind=args.camind,aif=args.aif)
-    elif(args.dataset=='defocusnet'):
-        depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[1],args,device_comp,calc_distmse=True)
-    elif(args.dataset=='ddff'):
-        print('DDFF dataset Evaluation')
-        kcam=5.0
-        for kcam in [0.1,0.5,0.8,11,12,13,14,15,16,17,18]:
-            print('kcam=%2.2f'%(kcam))
-            depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(TrainImgLoader,model_info,args.depthscale,args.fscale,args.s2limits,
-            dataset=args.dataset,camind=args.camind,aif=args.aif,kcam=kcam,f=9.5e-3)
-            print('MSE:%2.4f'%(s2loss2))
-       
-    print('s2 loss2: MSE: '+str(depthMSE)+" RMSE:"+str(depthMSE**0.5))
-    print('blur loss = '+str(blurloss))
-    print('mean blur = '+str(meanblur))  
-    print('min blur = '+str(minblur))
-    print('max blur = '+str(maxblur)) 
-    print('gt mean blur = '+str(gtmeanblur)) 
-    print('__________________')
+elif(args.dataset=="DSLR"):
+    loaders=DSLR.load_data(datapath=args.datapath,train_n=10,blur=1,WORKERS_NUM=0,
+            BATCH_SIZE=1,out_depth=args.out_depth)
     
-if __name__ == "__main__":
-    main()
+#testing
+for st_iter, sample_batch in enumerate(loaders[0]):
+    if(args.dataset=="nyu"):
+        X=sample_batch['rgb'].float().to(device_comp)
+        depth=sample_batch['depth'].float().to(device_comp)
+        blur=sample_batch['blur'].float().to(device_comp)
+        depth=torch.unsqueeze(depth,dim=1)
+        depth=torch.unsqueeze(depth,dim=1)
+        focus_distance=sample_batch['fdist']
+        focus_distance=torch.unsqueeze(focus_distance,dim=2).unsqueeze(dim=3)
+        focus_distance=torch.repeat_interleave(focus_distance,depth.shape[2],dim=2).repeat_interleave(depth.shape[3],dim=3)
+        focus_distance=focus_distance.to(device_comp)
+
+    if(len(args.s2limits)==2):
+        if(args.out_depth==1):
+                mask=(depth>args.s2limits[0])*(depth<args.s2limits[1]).int()
+        else:
+            mask=((focus_distance*depth)>args.s2limits[0])*((focus_distance*depth)<args.s2limits[1]).int()
+        s=torch.sum(mask).item()
+        #continue loop if there are no ground truth data in the range we are interested in
+        if(s==0):
+            print('no data in the provided range for this batch. skipping.')
+            continue
+    else:
+        mask=torch.ones_like(depth)
+
+    stacknum = 1
+    X2_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
+    s1_fcs = torch.ones([X.shape[0], 1 * stacknum, X.shape[2], X.shape[3]])
+    s1_fcs = s1_fcs.float().to(device_comp)
+    for t in range(stacknum):
+        #iterate through the batch
+        for i in range(X.shape[0]):
+            if(args.dataset=='nyu'):
+                fd=sample_batch['fdist'][i].item()
+                f=sample_batch['f'][i].item()
+                k=sample_batch['kcam'][i].item()
+            if(not args.aif):
+                X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*k*(fd-f)
+                s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)
+    X2_fcs = X2_fcs.float().to(device_comp)
+    if(args.out_depth==1):
+            pred_depth,pred_blur,corrected_blur=model(X,camind=args.camind,camparam=X2_fcs,foc_dist=s1_fcs)
+    else:
+        pred_depth,pred_blur,corrected_blur=model(X,camind=args.camind,camparam=X2_fcs)
+    #scale the predictions back
+    pred_depth*=args.depthscale
+    mask=torch.squeeze(mask,dim=2)
+    depth=torch.squeeze(depth,dim=2)
+    print('pred blur:'+str(torch.mean(pred_blur[mask>0])))
+    print('corrected blur:'+str(torch.mean(corrected_blur[mask>0])))
+    print('pred depth:'+str(torch.mean(pred_depth[mask>0])))
+    print('GT depth:'+str(torch.mean((depth)[mask>0])))
+    break
+
+# def main():
+#     if(args.dataset=='blender' or args.dataset=='defocusnet' or args.dataset=='nyu'):  
+#         print('evaluating on blender or defocusnet')         
+#         depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[1],args,device_comp,calc_distmse=True)
+#         #util_func.kcamwise_blur(model,loaders[1],args,device_comp)
+#     elif(args.dataset=='DSLR'):
+#         fd_in=1.0
+#         for kcam_in in [1.3]:
+#             for f_in in [6]:
+#                 f_in=f_in*1e-3
+#                 for fd_in in [1.0]:
+#                     print('***** fd = '+str(fd_in))
+#                     depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[1],args,device_comp,calc_distmse=False,
+#                                                                                                 kcam_in=kcam_in,f_in=f_in,fd_in=fd_in)
+#                     print('s2 loss2: MSE: '+str(depthMSE)+" RMSE:"+str(depthMSE**0.5))
+#     elif(args.dataset=='defocusnet'):
+#         depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(model,loaders[1],args,device_comp,calc_distmse=True)
+#     elif(args.dataset=='ddff'):
+#         print('DDFF dataset Evaluation')
+#         kcam=5.0
+#         for kcam in [0.1,0.5,0.8,11,12,13,14,15,16,17,18]:
+#             print('kcam=%2.2f'%(kcam))
+#             depthMSE,valueMSE,blurloss,meanblur,gtmeanblur,minblur,maxblur=util_func.eval(TrainImgLoader,model_info,args.depthscale,args.fscale,args.s2limits,
+#             dataset=args.dataset,camind=args.camind,aif=args.aif,kcam=kcam,f=9.5e-3)
+#             print('MSE:%2.4f'%(s2loss2))
+       
+#     print('s2 loss2: MSE: '+str(depthMSE)+" RMSE:"+str(depthMSE**0.5))
+#     print('blur loss = '+str(blurloss))
+#     print('mean blur = '+str(meanblur))  
+#     print('min blur = '+str(minblur))
+#     print('max blur = '+str(maxblur)) 
+#     print('gt mean blur = '+str(gtmeanblur)) 
+#     print('__________________')
+    
+# if __name__ == "__main__":
+#     main()
 
 '''
 #plot MSE vs dist for various S1 values

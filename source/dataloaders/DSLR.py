@@ -110,7 +110,7 @@ class ImageDataset(torch.utils.data.Dataset):
         img_dpt=img_dpt/1000.
         mat_dpt_scaled = img_dpt/self.max_dpt
         mat_dpt = mat_dpt_scaled.copy()[:, :, np.newaxis]
-        if(not self.out_depth):
+        if(self.out_depth==0):
             mat_dpt = mat_dpt/self.s1
 
         #read rgb image
@@ -182,19 +182,19 @@ def load_data(datapath,train_n,blur,
                                max_dpt=MAX_DPT,
                                blurclip=blurclip,out_depth=out_depth)
     
-    # test_dataset = ImageDataset(datapath,datanum,test_idx,blur=blur,transform_fnc=tr_test,
-    #                            fstack=fstack, max_dpt=MAX_DPT,
-    #                            blurclip=blurclip,out_depth=out_depth)
+    test_dataset = ImageDataset(rgb_test,dpt_test,blur=blur,transform_fnc=tr_train,
+                               max_dpt=MAX_DPT,
+                               blurclip=blurclip,out_depth=out_depth)
 
     loader_train = torch.utils.data.DataLoader(dataset=train_dataset, num_workers=WORKERS_NUM, batch_size=BATCH_SIZE, shuffle=True)
-    # loader_valid = torch.utils.data.DataLoader(dataset=test_dataset, num_workers=1, batch_size=1, shuffle=False)
+    loader_test = torch.utils.data.DataLoader(dataset=test_dataset, num_workers=WORKERS_NUM, batch_size=BATCH_SIZE, shuffle=True)
 
     # total_steps = int(len(train_dataset) / BATCH_SIZE)
     # print("Total number of steps per epoch:", total_steps)
     # print("Total number of training sample:", len(train_dataset))
     # print("Total number of validataion sample:", len(test_dataset))
 
-    return [loader_train,0]
+    return [loader_train,loader_test]
 
 
 # depthpath='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\'
@@ -251,7 +251,7 @@ def get_data_stats():
     loaders=load_data(datapath=datapath,train_n=train_n,blur=1,WORKERS_NUM=0,
             BATCH_SIZE=1,out_depth=True)
     print('stats of train data')
-    depthlist=get_loader_stats(loaders[0])
+    depthlist=get_loader_stats(loaders[1])
     #plot histogram of GT depths
     depthlist=depthlist.numpy()
     _ = plt.hist(depthlist, bins='auto') 

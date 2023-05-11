@@ -114,6 +114,9 @@ class ImageDataset(torch.utils.data.Dataset):
             self.kcam=1/(self.f**2/N/px)
             print('kcam:'+str(self.kcam))
             print('f:'+str(self.f))
+            print('N:'+str(N))
+            print('px:'+str(px))
+            print('s1:'+str(self.s1))
 
         ##### Load and sort all images
         self.imglist_rgb = [f for f in listdir(self.rgbpath) if (isfile(join(self.rgbpath, f)) and f[-4:] == ".png" and int(f[:-4]) in idx)]
@@ -141,7 +144,7 @@ class ImageDataset(torch.utils.data.Dataset):
         #mat_dpt_scaled = img_dpt_scaled / 1.9
         mat_dpt_scaled = img_dpt/self.max_dpt
         mat_dpt = mat_dpt_scaled.copy()[:, :, np.newaxis]
-        if(not self.out_depth):
+        if(self.out_depth==0):
             mat_dpt = mat_dpt/self.s1
 
         #read rgb image
@@ -197,7 +200,7 @@ def load_data(datapath,datanum, blur,fstack,
                                fstack=fstack, max_dpt=MAX_DPT,
                                blurclip=blurclip,out_depth=out_depth)
 
-    loader_train = torch.utils.data.DataLoader(dataset=train_dataset, num_workers=WORKERS_NUM, batch_size=BATCH_SIZE, shuffle=True)
+    loader_train = torch.utils.data.DataLoader(dataset=train_dataset, num_workers=WORKERS_NUM, batch_size=BATCH_SIZE, shuffle=False)
     loader_valid = torch.utils.data.DataLoader(dataset=test_dataset, num_workers=1, batch_size=1, shuffle=False)
 
     total_steps = int(len(train_dataset) / BATCH_SIZE)

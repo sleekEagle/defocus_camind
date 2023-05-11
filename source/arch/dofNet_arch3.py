@@ -187,6 +187,7 @@ class AENet(nn.Module):
                         pool_temp.pop(0)
                     else:
                         joint_pool =  mul[:, 1 * i:1 * (i + 1), :, :]
+                    print('joint_pool-:'+str(torch.mean(joint_pool)))
                     conv = self.__getattr__('conv_down2_' + str(j + 0))(joint_pool)
                     down_temp.append(conv)
 

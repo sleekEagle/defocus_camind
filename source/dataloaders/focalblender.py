@@ -236,7 +236,7 @@ class ToTensor(object):
 
 def load_data(data_dir, blur,aif,train_split,fstack,
               WORKERS_NUM, BATCH_SIZE, FOCUS_DIST, REQ_F_IDX, MAX_DPT=1,blurclip=1,kcampath=None,
-              dataset='blender',out_depth=True):
+              dataset='blender',out_depth=False):
     img_dataset = ImageDataset(root_dir=data_dir,blur=blur,aif=aif,transform_fnc=transforms.Compose([ToTensor()]),
                                focus_dist=FOCUS_DIST,fstack=fstack,req_f_indx=REQ_F_IDX, max_dpt=MAX_DPT,
                                blurclip=blurclip,kcampath=kcampath,
