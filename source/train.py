@@ -26,16 +26,18 @@ blurclip is
 75.5 for NYU 
 '''
 parser.add_argument('--blurclip', type=float,default=6.5,help='Clip blur by this value : only applicable for camind model. Default=10')
-parser.add_argument('--blurweight', type=float,default=5.0,help='weight for blur loss')
+parser.add_argument('--blurweight', type=float,default=100.0,help='weight for blur loss')
 parser.add_argument('--depthweight', type=float,default=1.0,help='weight for blur loss')
 parser.add_argument('--savepath', default='C:\\Users\\lahir\\models\\camind\\', help='path to the saved model')
 parser.add_argument('--checkpt', default=None, help='path to the saved model')
+parser.add_argument('--kcamscale', type=float,default=30,help='Scale up everything after blur prediction and before they are sent to the depth prediction network')
+
 '''
 s2limits is
 [0.1,2.8] for defocusnet
 [0.7,10.0] for NYU 
 '''
-parser.add_argument('--s2limits', nargs="*", type=float, default=[0.1,3.0],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--s2limits', nargs="*", type=float, default=[0.1,10.0],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--dataset', default='nyu', help='data path')
 parser.add_argument('--datanum', default='8', help='dataset number. Only applicable for NYU depth dataset')
 parser.add_argument('--camind', type=bool,default=False, help='True: use camera independent model. False: use defocusnet model')
@@ -182,7 +184,7 @@ def train_model(loader):
                     f=sample_batch['f'][i].item()
                     k=sample_batch['kcam'][i].item()     
                     if(not args.aif):
-                        X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*k*(focus_distance-f)
+                        X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*k*(focus_distance-f)*args.kcamscale
                         s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)
 
             X2_fcs = X2_fcs.float().to(device_comp)

@@ -194,7 +194,7 @@ def eval(model,loader,args,device_comp,kcam_in=0,f_in=0,fd_in=0,calc_distmse=Fal
                     # print('f:'+str(f))
                     # print('fd:'+str(fd))
                 if(not args.aif):
-                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*k*(fd-f)
+                    X2_fcs[i, t:(t + 1), :, :] = X2_fcs[i, t:(t + 1), :, :]*k*(fd-f)*args.kcamscale
                     s1_fcs[i, t:(t + 1), :, :] = s1_fcs[i, t:(t + 1), :, :]*(focus_distance)
                 elif(args.dataset=='ddff'):
                     fd=foc_dist[i].item()

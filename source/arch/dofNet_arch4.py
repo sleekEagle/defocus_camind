@@ -207,7 +207,6 @@ class AENet(nn.Module):
                 join_pool = torch.cat([pool_temp[i], pool_max[0]], dim=1)
                 bridge.append(self.bridge2(join_pool))
 
-
             up_temp = []
             for j in range(self.n_blocks + 1):
                 for i in range(k):
