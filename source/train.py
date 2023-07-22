@@ -15,8 +15,8 @@ from pathlib import Path
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
 # parser.add_argument('--datapath', default="C://Users//lahir//focalstacks//datasets//mediumN1//", help='blender data path')
-# parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
-parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\', help='blender data path')
+parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
+# parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\', help='blender data path')
 parser.add_argument('--bs', type=int,default=12, help='training batch size')
 parser.add_argument('--epochs', type=int,default=10000, help='training batch size')
 parser.add_argument('--depthscale', type=float,default=1.,help='divide all depths by this value')
@@ -26,10 +26,10 @@ blurclip is
 75.5 for NYU 
 '''
 parser.add_argument('--blurclip', type=float,default=6.5,help='Clip blur by this value : only applicable for camind model. Default=10')
-parser.add_argument('--blurweight', type=float,default=100.0,help='weight for blur loss')
+parser.add_argument('--blurweight', type=float,default=1.0,help='weight for blur loss')
 parser.add_argument('--depthweight', type=float,default=1.0,help='weight for blur loss')
 parser.add_argument('--savepath', default='C:\\Users\\lahir\\models\\camind\\', help='path to the saved model')
-parser.add_argument('--checkpt', default=None, help='path to the saved model')
+parser.add_argument('--checkpt', default=r'C:\Users\lahir\models\camind\camind_defocusnet_bs_12_depth_1_dweight_1.0_bweight_1.0\3269.pth', help='path to the saved model')
 parser.add_argument('--kcamscale', type=float,default=30,help='Scale up everything after blur prediction and before they are sent to the depth prediction network')
 
 '''
@@ -37,10 +37,10 @@ s2limits is
 [0.1,2.8] for defocusnet
 [0.7,10.0] for NYU 
 '''
-parser.add_argument('--s2limits', nargs="*", type=float, default=[0.1,10.0],  help='the interval of depth where the errors are calculated')
-parser.add_argument('--dataset', default='nyu', help='data path')
+parser.add_argument('--s2limits', nargs="*", type=float, default=[0.1,3.0],  help='the interval of depth where the errors are calculated')
+parser.add_argument('--dataset', default='defocusnet', help='data path')
 parser.add_argument('--datanum', default='8', help='dataset number. Only applicable for NYU depth dataset')
-parser.add_argument('--camind', type=bool,default=False, help='True: use camera independent model. False: use defocusnet model')
+parser.add_argument('--camind', type=bool,default=True, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--aif', type=bool,default=False, help='True: Train with the AiF images. False: Train with blurred images')
 parser.add_argument('--out_depth', type=int,default=1, help='True: use camera independent model. False: use defocusnet model')
 parser.add_argument('--lr',type=float, default=0.00001,help='dilvide all depths by this value')
@@ -135,21 +135,6 @@ def train_model(loader):
                 depth=torch.unsqueeze(depth,dim=1)
                 blur=torch.unsqueeze(blur,dim=1)
                 stacknum=X.shape
-
-                # plot data
-                # import matplotlib.pyplot as plt
-                # img=X[10,:,:,:].detach().cpu().permute(1,2,0)
-                # plt.imshow(img)
-                # plt.show()
-                # d=gt_step2[10,0,:,:].detach().cpu()
-                # plt.imshow(d)
-                # plt.show()
-
-                # f, axarr = plt.subplots(1,2)
-                # axarr[0].imshow(img)
-                # axarr[1].imshow(d)
-                # plt.show()
-
             else:
                 # Setting up input and output data
                 X = sample_batch['input'][:,0,:,:,:].float().to(device_comp)
@@ -228,7 +213,7 @@ def train_model(loader):
                 blurloss_sum+=blur_loss.item()*args.blurweight
             depthloss_sum+=depth_loss.item()*args.depthweight
 
-            if (st_iter + 1) % 10 == 0:
+            if (st_iter) % 10 == 0:
                 print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}, DLoss: {:.4f}, BLoss: {:.4f}'
                       .format(epoch_iter + 1, args.epochs, st_iter + 1, total_steps, loss_sum / iter_count, depthloss_sum / iter_count, blurloss_sum / iter_count))
     

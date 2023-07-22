@@ -94,6 +94,7 @@ class ImageDataset(torch.utils.data.Dataset):
                  out_depth=False):
         p=Path(datapath)
         self.rgbpath=p/("refocused"+str(datanum))
+        print('datapath:'+str(self.rgbpath))
         self.depthpath=p/"depth"
         camparampath=p/("refocused"+str(datanum))/"camparam.txt"
 

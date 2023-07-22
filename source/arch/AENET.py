@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Aug 29 14:54:12 2018
-
-@author: maximov
-"""
-
 
 import torch
 import torch.nn as nn
@@ -45,9 +37,8 @@ class AENet(nn.Module):
         )
 
         if flag_step2:
-            self.conv_down2_0 = self.convsblocks(2, self.num_filter * 1, act_fnc)
+            self.conv_down2_0 = self.convsblocks(1, self.num_filter * 1, act_fnc)
             self.pool2_0 = self.poolblock()
-
 
             for i in range(self.n_blocks):
                 self.add_module('conv_down2_' + str(i + 1), self.convsblocks(self.num_filter * (2 ** i) * 2, self.num_filter * (2 ** i) * 2, act_fnc))
@@ -98,7 +89,7 @@ class AENet(nn.Module):
         return pool
 
 
-    def forward(self, x, inp=3, k=8, flag_step2=False, x2=0):
+    def forward(self, x, inp=3, k=1, flag_step2=True):
         down1 = []
         pool_temp = []
         for j in range(self.n_blocks + 1):
@@ -108,10 +99,8 @@ class AENet(nn.Module):
                     joint_pool = torch.cat([pool_temp[0], pool_max[0]], dim=1)
                     pool_temp.pop(0)
                 else:
-                    print('x:'+str(x.shape))
                     joint_pool = x[:, inp * i:inp * (i + 1), :, :]
-                
-                print('joint pool:'+str(joint_pool.shape))
+
                 conv = self.__getattr__('conv_down_' + str(j+0))(joint_pool)
                 down_temp.append(conv)
 
@@ -130,7 +119,6 @@ class AENet(nn.Module):
         for i in range(k):
             join_pool = torch.cat([pool_temp[i], pool_max[0]], dim=1)
             bridge.append(self.bridge(join_pool))
-
 
         up_temp = []
         for j in range(self.n_blocks+2):
@@ -159,7 +147,6 @@ class AENet(nn.Module):
                         out = out_col
                     else:
                         out = torch.cat([out, out_col], dim=1)
-
         if flag_step2:
             down2 = []
             pool_temp = []
@@ -170,10 +157,7 @@ class AENet(nn.Module):
                         joint_pool = torch.cat([pool_temp[0], pool_max[0]], dim=1)
                         pool_temp.pop(0)
                     else:
-                        #print('out:'+str(out.shape))
-                        #print('x2:'+str(x2.shape))
-                        joint_pool = torch.cat([out[:, 1 * i:1 * (i + 1), :, :],x2[:, 1 * i:1 * (i + 1), :, :]], dim=1)
-                        #print('jointpool:'+str(joint_pool.shape))
+                        joint_pool = torch.cat([out[:, 1 * i:1 * (i + 1), :, :]], dim=1)
 
                     conv = self.__getattr__('conv_down2_' + str(j + 0))(joint_pool)
                     down_temp.append(conv)
@@ -220,7 +204,6 @@ class AENet(nn.Module):
             out_step2 = self.conv_out2(end2)
 
         if flag_step2:
-            return out_step2, out
+            return out_step2,out
         else:
             return out
-

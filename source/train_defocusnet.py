@@ -15,6 +15,9 @@ from torchvision import transforms, utils
 import numpy as np
 import importlib
 import util_func_defocusnet
+from dataloaders import nyudepthv2
+from arch.AENET import AENet
+from configs.nyu_options import NYUOptions
 
 TRAIN_PARAMS = {
     'ARCH_NUM': 1,
@@ -76,17 +79,20 @@ OUTPUT_PARAMS = {
 }
 
 
-def forward_pass(X, model_info, TRAIN_PARAMS, DATA_PARAMS, stacknum=1, additional_input=None):
-    #to train with random number of inputs
-    if TRAIN_PARAMS['RANDOM_LEN_INPUT']==1 and stacknum<DATA_PARAMS['INP_IMG_NUM']:
-        X[:, model_info['inp_ch_num'] * stacknum:, :, :] = torch.zeros(
-            [X.shape[0], (DATA_PARAMS['INP_IMG_NUM'] - stacknum) * model_info['inp_ch_num'], X.shape[2], X.shape[3]])
+opt = NYUOptions()
+args = opt.initialize().parse_args()
+crop_size=(args.crop_h, args.crop_w)
+train_dataset=nyudepthv2.nyudepthv2(data_path=args.data_path,rgb_dir=args.rgb_dir,depth_dir=args.depth_dir,crop_size=crop_size,is_blur=args.is_blur,is_train=True)
+val_dataset=nyudepthv2.nyudepthv2(data_path=args.data_path,rgb_dir=args.rgb_dir,depth_dir=args.depth_dir,crop_size=crop_size,is_blur=args.is_blur,is_train=False)
 
-    flag_step2 = True if TRAIN_PARAMS['TRAINING_MODE']==2 else False
+'''
+load defocusNet model
+'''
+device_id=0
+ch_inp_num = 3
+ch_out_num = 1
+model = AENet(ch_inp_num, 1, 16, flag_step2=True).to(device_id)
 
-    outputs = model_info['model'](X, model_info['inp_ch_num'], stacknum, flag_step2=flag_step2, x2 = additional_input)
-
-    return (outputs[1], outputs[0]) if TRAIN_PARAMS['TRAINING_MODE']==2 else (outputs, outputs)
 
 def eval(loaders,model_info, TRAIN_PARAMS, DATA_PARAMS):
     mse_ar,blurmse_ar=[],[]
