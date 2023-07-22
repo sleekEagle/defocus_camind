@@ -13,8 +13,8 @@ import numpy as np
 import random
 
 #f in mm
-def get_blur(s1,s2):
-    blur=torch.abs(s2-s1)/s2
+def get_blur(s1,s2,f):
+    blur=torch.abs(s2-s1)/s2/(s1-f)
     return blur
 
 #selected_dirs: what rgb directories are being selected : a list of indices of sorted dir names
@@ -92,7 +92,7 @@ class nyudepthv2(BaseDataset):
             image,depth = self.augment_test_data(image, depth)
 
         depth = depth / 1000.0  # convert in meters
-        blur=get_blur(self.fdist,depth)
+        blur=get_blur(self.fdist,depth,25e-3)
         return {'image': image, 'depth': depth, 'blur':blur, 'class_id': class_id}
 
 # for st_iter, sample_batch in enumerate(loader):
