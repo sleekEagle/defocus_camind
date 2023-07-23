@@ -106,6 +106,8 @@ def validate_dist(val_loader, model, criterion_d, device_id, args,min_dist=0.0,m
         input_RGB = batch['image'].to(device_id)
         depth_gt = batch['depth'].to(device_id)
         class_id = batch['class_id']
+        f=batch['f'].to(device_id)
+        kcam=(1/(f**2)*scale).float()
         #if(batch_idx>10): break
         with torch.no_grad():
             if args.shift_window_test:
@@ -126,7 +128,7 @@ def validate_dist(val_loader, model, criterion_d, device_id, args,min_dist=0.0,m
                 input_RGB = torch.cat((input_RGB, torch.flip(input_RGB, [3])), dim=0)
                 class_ids = torch.cat((class_ids, class_ids), dim=0)
             
-            pred_d,_ = model(input_RGB,flag_step2=True,kcam=0)
+            pred_d,_ = model(input_RGB,flag_step2=True,kcam=kcam)
         if args.flip_test:
             batch_s = pred_d.shape[0]//2
             pred_d = (pred_d[:batch_s] + torch.flip(pred_d[batch_s:], [3]))/2.0

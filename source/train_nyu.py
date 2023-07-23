@@ -78,7 +78,7 @@ for i in range(600):
 
         mask=(depth_gt>0.0)*(depth_gt<2.0).detach_()
 
-        depth_pred,blur_pred = model(input_RGB,flag_step2=True,kcam=0)
+        depth_pred,blur_pred = model(input_RGB,flag_step2=True,kcam=kcam)
 
         loss_d=criterion(depth_pred.squeeze(dim=1)[mask], depth_gt[mask])
         loss_b=criterion(blur_pred.squeeze(dim=1)[mask],gt_blur[mask])
