@@ -6,15 +6,9 @@ Created on Wed Aug 29 14:54:12 2018
 """
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
 import torch.utils.data
-from torchvision import transforms, utils
 
-import numpy as np
-import importlib
-import util_func_defocusnet
 from dataloaders import nyudepthv2
 from arch.AENET import AENet
 from configs.nyu_options import NYUOptions
