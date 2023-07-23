@@ -29,6 +29,9 @@ if not os.path.exists(args.resultspth):
 now = datetime.now()
 dt_string = now.strftime("%d-%m-%Y_%H_%M_%S_camind_NYU")+'.log'
 logpath=join(args.resultspth,dt_string)
+logger.basicConfig(filename=logpath,filemode='w', level=logger.INFO)
+logger.info('Starting training')
+logger.info(args)
 
 #get dataloaders
 crop_size=(args.crop_h, args.crop_w)
