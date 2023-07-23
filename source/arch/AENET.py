@@ -89,7 +89,7 @@ class AENet(nn.Module):
         return pool
 
 
-    def forward(self, x, inp=3, k=1, flag_step2=True):
+    def forward(self, x, inp=3, k=1, flag_step2=True,kcam=0):
         down1 = []
         pool_temp = []
         for j in range(self.n_blocks + 1):
@@ -148,6 +148,8 @@ class AENet(nn.Module):
                     else:
                         out = torch.cat([out, out_col], dim=1)
         if flag_step2:
+            if kcam>0:
+                out=out*kcam
             down2 = []
             pool_temp = []
             for j in range(self.n_blocks + 1):

@@ -14,7 +14,7 @@ import random
 
 #f in mm
 def get_blur(s1,s2,f):
-    blur=torch.abs(s2-s1)/s2/(s1-f)
+    blur=(torch.abs(s2-s1)/s2/(s1-f)*f**2)*2000.0
     return blur
 
 #selected_dirs: what rgb directories are being selected : a list of indices of sorted dir names
@@ -33,8 +33,11 @@ class nyudepthv2(BaseDataset):
         self.data_path = os.path.join(data_path, 'nyu_depth_v2')
         self.rgbpath=os.path.join(self.data_path,rgb_dir)
         self.depthpath=os.path.join(self.data_path,depth_dir)
+        rgb_dir='refocused_f_25_fdist_2'
         self.fdist=float(rgb_dir.split('_')[-1])
+        self.f=float(rgb_dir.split('_')[2])*1e-3
         print('fdist:'+str(self.fdist))
+        print('f:'+str(self.f))
         
         #read scene names
         scene_path=os.path.join(self.data_path, 'scenes.mat')
@@ -92,8 +95,8 @@ class nyudepthv2(BaseDataset):
             image,depth = self.augment_test_data(image, depth)
 
         depth = depth / 1000.0  # convert in meters
-        blur=get_blur(self.fdist,depth,25e-3)
-        return {'image': image, 'depth': depth, 'blur':blur, 'class_id': class_id}
+        blur=get_blur(self.fdist,depth,self.f)
+        return {'image': image, 'depth': depth, 'blur':blur, 'class_id': class_id,'fdist':self.fdist,'f':self.f}
 
 # for st_iter, sample_batch in enumerate(loader):
 #         input_RGB = sample_batch['image']
@@ -174,7 +177,13 @@ def get_loader_stats(loader):
 
 # train_dataset=nyudepthv2(data_path=data_path,rgb_dir=rgb_dir,depth_dir=depth_dir,crop_size=crop_size,is_blur=is_blur,is_train=True)
 # val_dataset=nyudepthv2(data_path=data_path,rgb_dir=rgb_dir,depth_dir=depth_dir,crop_size=crop_size,is_blur=is_blur,is_train=False)
+# train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=1,
+#                                            num_workers=0,pin_memory=True)
 
+# val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=1,
+#                                          num_workers=0,pin_memory=True)
+
+# get_loader_stats(train_loader)
 
 
 # from configs.train_options import TrainOptions
