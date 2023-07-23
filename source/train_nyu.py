@@ -99,7 +99,7 @@ for i in range(600):
 
     if (i+1)%evalitr==0:
         with torch.no_grad():
-            result=test.validate(val_loader, model, criterion, device_id, args)
+            result=test.validate_dist(val_loader, model, criterion, device_id, args,min_dist=0.0,max_dist=2.0)
             print(result)
             logging.info(result)
             model.train()
