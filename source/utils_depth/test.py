@@ -47,7 +47,7 @@ def validate(val_loader, model, criterion_d, device_id, args):
                 input_RGB = torch.cat((input_RGB, torch.flip(input_RGB, [3])), dim=0)
                 class_ids = torch.cat((class_ids, class_ids), dim=0)
 
-            pred_d,_ = model(input_RGB,flag_step2=True,kcam=kcam)
+            pred_d,_ = model(input_RGB,flag_step2=True,kcam=0)
         if args.flip_test:
             batch_s = pred_d.shape[0]//2
             pred_d = (pred_d[:batch_s] + torch.flip(pred_d[batch_s:], [3]))/2.0
