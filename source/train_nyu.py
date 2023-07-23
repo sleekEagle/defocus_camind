@@ -101,4 +101,5 @@ for i in range(600):
         with torch.no_grad():
             result=test.validate(val_loader, model, criterion, device_id, args)
             print(result)
+            logging.info(result)
             model.train()
