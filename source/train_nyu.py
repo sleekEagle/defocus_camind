@@ -70,15 +70,15 @@ for i in range(600):
         class_id=batch['class_id']
         gt_blur=batch['blur'].to(device_id)
         fdist=batch['fdist'].to(device_id)
-        f=batch['f'].to(device_id)
-        scale=f**2
-        kcam=(1/(f**2)*scale).float()
+        f=batch['f'].item()
+        scale=(f**2)
+        kcam=(1/(f**2)*scale)
 
         optimizer.zero_grad()
 
         mask=(depth_gt>0.0)*(depth_gt<2.0).detach_()
 
-        depth_pred,blur_pred = model(input_RGB,flag_step2=True,kcam=kcam.item())
+        depth_pred,blur_pred = model(input_RGB,flag_step2=True,kcam=kcam)
 
         loss_d=criterion(depth_pred.squeeze(dim=1)[mask], depth_gt[mask])
         loss_b=criterion(blur_pred.squeeze(dim=1)[mask],gt_blur[mask])
