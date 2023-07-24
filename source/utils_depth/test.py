@@ -127,7 +127,8 @@ def validate_dist(val_loader, model, criterion_d, device_id, args,min_dist=0.0,m
             if args.flip_test:
                 input_RGB = torch.cat((input_RGB, torch.flip(input_RGB, [3])), dim=0)
                 class_ids = torch.cat((class_ids, class_ids), dim=0)
-            
+            if args.is_kcam==0:
+                kcam=0
             pred_d,_ = model(input_RGB,flag_step2=True,kcam=kcam)
         if args.flip_test:
             batch_s = pred_d.shape[0]//2

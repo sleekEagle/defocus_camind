@@ -13,6 +13,7 @@ class NYUOptions(BaseOptions):
         parser.add_argument('--layer_decay',          type=float, default=0.9)
         parser.add_argument('--max_train_dist',          type=float, default=2.0)
         parser.add_argument('--is_blur',type=int,default=1)
+        parser.add_argument('--is_kcam',type=int,default=1)
         
         parser.add_argument('--crop_h',  type=int, default=480)
         parser.add_argument('--crop_w',  type=int, default=480)        
