@@ -71,7 +71,7 @@ for i in range(600):
         gt_blur=batch['blur'].to(device_id)
         fdist=batch['fdist'].to(device_id)
         f=float(args.rgb_dir.split('_')[2])*1e-3
-        kcam=(fdist-f).float().to(device_id)
+        kcam=(fdist-f).item()
 
         optimizer.zero_grad()
 
