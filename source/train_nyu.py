@@ -69,9 +69,9 @@ for i in range(600):
         depth_gt=batch['depth'].to(device_id)
         class_id=batch['class_id']
         gt_blur=batch['blur'].to(device_id)
-        fdist=batch['fdist'].to(device_id)
         f=float(args.rgb_dir.split('_')[2])*1e-3
-        kcam=(fdist-f).item()
+        fdist=float(args.rgb_dir.split('_')[-1])
+        kcam=(fdist-f)
 
         optimizer.zero_grad()
 
