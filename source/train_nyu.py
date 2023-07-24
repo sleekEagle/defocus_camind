@@ -70,7 +70,7 @@ for i in range(600):
         class_id=batch['class_id']
         gt_blur=batch['blur'].to(device_id)
         fdist=batch['fdist'].to(device_id)
-        f=batch['f'].item()
+        f=float(args.rgb_dir.split('_')[2])*1e-3
         scale=(f**2)
         kcam=(1/(f**2)*scale)
 
