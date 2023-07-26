@@ -112,8 +112,9 @@ for i in range(800):
             result=test.validate_dist(val_loader, model, criterion, device_id, args,min_dist=0.0,max_dist=2.0,kcam=kcam)
             print(result)
             logging.info(result)
+            modelname="_".join([str(element)[10:] for element in args.rgb_dir])
             torch.save({
                 'state_dict': model.state_dict()
-                },  os.path.join(os.path.abspath(args.resultspth),(args.rgb_dir[0])+'.tar'))
+                },  os.path.join(os.path.abspath(args.resultspth),(modelname)+'.tar'))
             
             model.train()
