@@ -43,6 +43,7 @@ train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_
 val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=1,
                                          num_workers=0,pin_memory=True)
 
+logger.info(args.rgb_dir)
 '''
 load defocusNet model
 '''
