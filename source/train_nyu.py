@@ -94,7 +94,7 @@ for i in range(800):
             # logging.info('nan in losses')
             continue
 
-        loss=loss_d+loss_b*0.01
+        loss=loss_d+loss_b
         total_d_loss+=loss_d.item()
         total_b_loss+=loss_b.item()
         loss.backward()
