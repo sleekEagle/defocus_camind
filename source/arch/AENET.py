@@ -144,12 +144,14 @@ class AENet(nn.Module):
                     out_col = self.conv_out(end)
 
                     if i == 0:
-                        out = out_col
+                        blur = out_col
                     else:
-                        out = torch.cat([out, out_col], dim=1)
+                        blur = torch.cat([out, out_col], dim=1)
         if flag_step2:
             if kcam>0:
-                out=out*kcam
+                out=blur*kcam
+            else:
+                out=blur
             down2 = []
             pool_temp = []
             for j in range(self.n_blocks + 1):

@@ -35,8 +35,8 @@ logger.info(args)
 
 #get dataloaders
 crop_size=(args.crop_h, args.crop_w)
-train_dataset=nyudepthv2.nyudepthv2(data_path=args.data_path,rgb_dir=args.rgb_dir,depth_dir=args.depth_dir,crop_size=crop_size,is_blur=args.is_blur,is_train=True)
-val_dataset=nyudepthv2.nyudepthv2(data_path=args.data_path,rgb_dir=args.rgb_dir,depth_dir=args.depth_dir,crop_size=crop_size,is_blur=args.is_blur,is_train=False)
+train_dataset=nyudepthv2.nyudepthv2(data_path=args.data_path,rgb_dir_list=args.rgb_dir,depth_dir=args.depth_dir,crop_size=crop_size,is_blur=args.is_blur,is_train=True)
+val_dataset=nyudepthv2.nyudepthv2(data_path=args.data_path,rgb_dir_list=args.rgb_dir,depth_dir=args.depth_dir,crop_size=crop_size,is_blur=args.is_blur,is_train=False)
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size,
                                            num_workers=0,pin_memory=True)
 
@@ -58,22 +58,28 @@ if args.resume_from:
 model_params = model.parameters()
 criterion=torch.nn.MSELoss()
 optimizer = optim.Adam(model_params,lr=args.min_lr)
-scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=300, gamma=0.1)
+scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=350, gamma=0.1)
 model.train()
 
 evalitr=10
-for i in range(600):
+'''
+virtual_bs is used when the dataloader bs is 1 but 
+we only step and zero the optimizer every virtual_bs steps so it acts as if the bs is larger
+This is helpfull when the GPU is not sufficient to fit a larger batch 
+but we can use a larger effective batch size
+'''
+virtual_bs=12
+base_f=25e-3
+for i in range(800):
     total_d_loss,total_b_loss=0,0
     for batch_idx, batch in enumerate(train_loader):
         input_RGB=batch['image'].float().to(device_id)
         depth_gt=batch['depth'].to(device_id)
         class_id=batch['class_id']
         gt_blur=batch['blur'].to(device_id)
-        f=float(args.rgb_dir.split('_')[2])*1e-3
-        fdist=float(args.rgb_dir.split('_')[-1])
-        kcam=(fdist-f)
-
-        optimizer.zero_grad()
+        f=float(args.rgb_dir[0].split('_')[2])*1e-3
+        fdist=float(args.rgb_dir[0].split('_')[-1])
+        kcam=(fdist-f)*base_f**2/f**2
 
         mask=(depth_gt>0.0)*(depth_gt<2.0).detach_()
 
@@ -88,23 +94,26 @@ for i in range(600):
             # logging.info('nan in losses')
             continue
 
-        loss=loss_d+loss_b
+        loss=loss_d+loss_b*0.01
         total_d_loss+=loss_d.item()
         total_b_loss+=loss_b.item()
         loss.backward()
-        optimizer.step()
     
-    optimizer.step()
+        if batch_idx%virtual_bs==0:
+            # print('optimizeinv : batch idx:'+str(batch_idx))
+            optimizer.step()
+            optimizer.zero_grad()
+
     print("Epochs=%3d blur loss=%5.4f  depth loss=%5.4f" %(i,total_b_loss/len(train_loader),total_d_loss/len(train_loader)))  
     logging.info("Epochs=%3d blur loss=%5.4f  depth loss=%5.4f" , i,total_b_loss/len(train_loader),total_d_loss/len(train_loader))
 
     if (i+1)%evalitr==0:
         with torch.no_grad():
-            result=test.validate_dist(val_loader, model, criterion, device_id, args,min_dist=0.0,max_dist=2.0)
+            result=test.validate_dist(val_loader, model, criterion, device_id, args,min_dist=0.0,max_dist=2.0,kcam=kcam)
             print(result)
             logging.info(result)
             torch.save({
                 'state_dict': model.state_dict()
-                },  os.path.join(os.path.abspath(args.resultspth),(args.rgb_dir)+'.tar'))
+                },  os.path.join(os.path.abspath(args.resultspth),(args.rgb_dir[0])+'.tar'))
             
             model.train()
