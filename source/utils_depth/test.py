@@ -90,7 +90,7 @@ def validate(val_loader, model, criterion_d, device_id, args):
 
 
 #provides distance wise error
-base_f=25e-3
+base_f=25
 def validate_dist(val_loader, model, criterion_d, device_id, args,min_dist=0.0,max_dist=10.0,kcam=0):
 
     if device_id == 0:
@@ -109,7 +109,7 @@ def validate_dist(val_loader, model, criterion_d, device_id, args,min_dist=0.0,m
         class_id = batch['class_id']
         f=batch['f']
         fdist=batch['fdist']
-        kcam=(fdist-f)*base_f**2/f**2
+        kcam=(fdist-f*1e-3)*base_f**2/f**2
         kcam=torch.unsqueeze(kcam,dim=1).unsqueeze(dim=1)
         kcam=torch.repeat_interleave(kcam,dim=1,repeats=input_RGB.shape[-2])
         kcam=torch.repeat_interleave(kcam,dim=2,repeats=input_RGB.shape[-1])
