@@ -13,9 +13,9 @@ import numpy as np
 import random
 
 #f in mm
-base_f=25
+base_f=25e-3
 def get_blur(s1,s2,f):
-    blur=torch.abs(s2-s1)/s2/(s1-f*1e-3)*f**2/(base_f**2)
+    blur=torch.abs(s2-s1)/s2/(s1-f)*(f**2)/(base_f**2)
     return blur
 
 #selected_dirs: what rgb directories are being selected : a list of indices of sorted dir names
@@ -74,7 +74,9 @@ class nyudepthv2(BaseDataset):
         num=self.file_idx[idx]
         #select an item from rgb_dir_list
         rgb_dir=random.choice(self.rgb_dir_list)
+        #fdist in m
         fdist=float(rgb_dir.split('_')[-1])
+        #f in m
         f=float(rgb_dir.split('_')[2])*1e-3
         
         # print('rgb dir:'+str(rgb_dir))
