@@ -209,6 +209,6 @@ class AENet(nn.Module):
             out_step2 = self.conv_out2(end2)
 
         if flag_step2:
-            return out_step2,out
+            return out_step2,blur
         else:
-            return out
+            return blur

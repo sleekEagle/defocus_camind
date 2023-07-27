@@ -80,7 +80,7 @@ for i in range(800):
         gt_blur=batch['blur'].to(device_id)
         f=batch['f']
         fdist=batch['fdist']
-        kcam=(fdist-f)*base_f**2/f**2
+        kcam=(fdist-f)*(base_f**2)/(f**2)
         kcam=torch.unsqueeze(kcam,dim=1).unsqueeze(dim=1)
         kcam=torch.repeat_interleave(kcam,dim=1,repeats=input_RGB.shape[-2])
         kcam=torch.repeat_interleave(kcam,dim=2,repeats=input_RGB.shape[-1])

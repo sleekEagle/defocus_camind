@@ -13,8 +13,9 @@ import numpy as np
 import random
 
 #f in mm
+base_f=25
 def get_blur(s1,s2,f):
-    blur=torch.abs(s2-s1)/s2
+    blur=torch.abs(s2-s1)/s2/(s1-f)*f**2/(base_f**2)
     return blur
 
 #selected_dirs: what rgb directories are being selected : a list of indices of sorted dir names
