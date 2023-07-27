@@ -22,12 +22,18 @@ def validate(val_loader, model, criterion_d, device_id, args):
         result_metrics[metric] = 0.0
 
     for batch_idx, batch in enumerate(val_loader):
-        input_RGB = batch['image'].to(device_id)
-        depth_gt = batch['depth'].to(device_id)
-        class_id = batch['class_id']
-        fdist=batch['fdist'].to(device_id)
-        f=batch['f'].to(device_id)
-        kcam=(1/(f**2)*scale).float()
+        input_RGB=batch['image'].float().to(device_id)
+        depth_gt=batch['depth'].to(device_id)
+        class_id=batch['class_id']
+        gt_blur=batch['blur'].to(device_id)
+        f=batch['f']
+        fdist=batch['fdist']
+        kcam=(fdist-f)*(base_f**2)/(f**2)
+        kcam=torch.unsqueeze(kcam,dim=1).unsqueeze(dim=1)
+        kcam=torch.repeat_interleave(kcam,dim=1,repeats=input_RGB.shape[-2])
+        kcam=torch.repeat_interleave(kcam,dim=2,repeats=input_RGB.shape[-1])
+        kcam=(kcam.to(device_id)).float()
+        kcam=torch.unsqueeze(kcam,dim=1)   
         #if(batch_idx>10): break
         with torch.no_grad():
             if args.shift_window_test:

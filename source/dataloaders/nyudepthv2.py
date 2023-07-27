@@ -75,7 +75,8 @@ class nyudepthv2(BaseDataset):
         #select an item from rgb_dir_list
         rgb_dir=random.choice(self.rgb_dir_list)
         fdist=float(rgb_dir.split('_')[-1])
-        f=float(rgb_dir.split('_')[2])
+        f=float(rgb_dir.split('_')[2])*1e-3
+        
         # print('rgb dir:'+str(rgb_dir))
         # print('fdist:'+str(fdist))
         # print('f:'+str(f))
