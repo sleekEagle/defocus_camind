@@ -148,10 +148,11 @@ class AENet(nn.Module):
                     else:
                         blur = torch.cat([out, out_col], dim=1)
         if flag_step2:
-            if kcam>0:
+            if type(kcam) is torch.Tensor:
                 out=blur*kcam
             else:
                 out=blur
+            
             down2 = []
             pool_temp = []
             for j in range(self.n_blocks + 1):
