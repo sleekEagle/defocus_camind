@@ -78,8 +78,9 @@ for i in range(800):
         depth_gt=batch['depth'].to(device_id)
         class_id=batch['class_id']
         gt_blur=batch['blur'].to(device_id)
-        f=float(args.rgb_dir[0].split('_')[2])*1e-3
-        fdist=float(args.rgb_dir[0].split('_')[-1])
+        f=batch['f']
+        fdist=batch['fdist']
+        fdist=batch['fdist']
         kcam=(fdist-f)*base_f**2/f**2
 
         mask=(depth_gt>0.0)*(depth_gt<2.0).detach_()
