@@ -149,7 +149,9 @@ class AENet(nn.Module):
                         blur = torch.cat([out, out_col], dim=1)
         if flag_step2:
             if type(kcam) is torch.Tensor:
+                # print('before kcam:'+str(torch.mean(blur)))
                 out=blur*kcam
+                # print('after kcam:'+str(torch.mean(out)))
             else:
                 out=blur
             

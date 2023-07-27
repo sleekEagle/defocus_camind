@@ -70,7 +70,7 @@ This is helpfull when the GPU is not sufficient to fit a larger batch
 but we can use a larger effective batch size
 '''
 virtual_bs=12
-base_f=25e-3
+base_f=25
 for i in range(800):
     total_d_loss,total_b_loss=0,0
     for batch_idx, batch in enumerate(train_loader):
@@ -80,12 +80,13 @@ for i in range(800):
         gt_blur=batch['blur'].to(device_id)
         f=batch['f']
         fdist=batch['fdist']
-        kcam=(fdist-f)*(base_f**2)/(f**2)
+        kcam=(fdist-f*1e-3)*(base_f**2)/(f**2)
+        # print('kcam:'+str(kcam))
         kcam=torch.unsqueeze(kcam,dim=1).unsqueeze(dim=1)
         kcam=torch.repeat_interleave(kcam,dim=1,repeats=input_RGB.shape[-2])
         kcam=torch.repeat_interleave(kcam,dim=2,repeats=input_RGB.shape[-1])
         kcam=(kcam.to(device_id)).float()
-        kcam=torch.unsqueeze(kcam,dim=1)
+        kcam=torch.unsqueeze(kcam,dim=1)   
 
         mask=(depth_gt>0.0)*(depth_gt<2.0).detach_()
 
