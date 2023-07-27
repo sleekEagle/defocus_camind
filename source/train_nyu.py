@@ -115,7 +115,7 @@ for i in range(800):
 
     if (i+1)%evalitr==0:
         with torch.no_grad():
-            result=test.validate_dist(val_loader, model, criterion, device_id, args,min_dist=0.0,max_dist=2.0,kcam=kcam)
+            result=test.validate_dist(val_loader, model, criterion, device_id, args,min_dist=0.0,max_dist=2.0)
             print(result)
             logging.info(result)
             modelname="_".join([str(element)[10:] for element in args.rgb_dir])
