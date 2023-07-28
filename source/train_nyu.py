@@ -81,17 +81,12 @@ for i in range(800):
         f=batch['f']
         fdist=batch['fdist']
         kcam=(fdist-f)*(base_f**2)/(f**2)
-        kcam=torch.unsqueeze(kcam,dim=1).unsqueeze(dim=1)
-        kcam=torch.repeat_interleave(kcam,dim=1,repeats=input_RGB.shape[-2])
-        kcam=torch.repeat_interleave(kcam,dim=2,repeats=input_RGB.shape[-1])
-        kcam=(kcam.to(device_id)).float()
-        kcam=torch.unsqueeze(kcam,dim=1)   
+        x2=fdist.tolist()
+        kcam=kcam.tolist()
 
         mask=(depth_gt>0.0)*(depth_gt<2.0).detach_()
 
-        if args.is_kcam==0:
-            kcam=0
-        depth_pred,blur_pred = model(input_RGB,flag_step2=True,kcam=kcam)
+        depth_pred,blur_pred = model(input_RGB,flag_step2=True,x2_list=x2,kcam_list=kcam)
 
         loss_d=criterion(depth_pred.squeeze(dim=1)[mask], depth_gt[mask])
         loss_b=criterion(blur_pred.squeeze(dim=1)[mask],gt_blur[mask])

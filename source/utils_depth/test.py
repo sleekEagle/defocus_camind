@@ -116,11 +116,8 @@ def validate_dist(val_loader, model, criterion_d, device_id, args,min_dist=0.0,m
         f=batch['f']
         fdist=batch['fdist']
         kcam=(fdist-f)*(base_f**2)/(f**2)
-        kcam=torch.unsqueeze(kcam,dim=1).unsqueeze(dim=1)
-        kcam=torch.repeat_interleave(kcam,dim=1,repeats=input_RGB.shape[-2])
-        kcam=torch.repeat_interleave(kcam,dim=2,repeats=input_RGB.shape[-1])
-        kcam=(kcam.to(device_id)).float()
-        kcam=torch.unsqueeze(kcam,dim=1)   
+        x2=fdist.tolist()
+        kcam=kcam.tolist()
 
         #if(batch_idx>10): break
         with torch.no_grad():
@@ -141,7 +138,7 @@ def validate_dist(val_loader, model, criterion_d, device_id, args,min_dist=0.0,m
             if args.flip_test:
                 input_RGB = torch.cat((input_RGB, torch.flip(input_RGB, [3])), dim=0)
                 class_ids = torch.cat((class_ids, class_ids), dim=0)
-            pred_d,_ = model(input_RGB,flag_step2=True,kcam=kcam)
+            pred_d,_ = model(input_RGB,flag_step2=True,x2_list=x2,kcam_list=kcam)
         if args.flip_test:
             batch_s = pred_d.shape[0]//2
             pred_d = (pred_d[:batch_s] + torch.flip(pred_d[batch_s:], [3]))/2.0

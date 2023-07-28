@@ -37,7 +37,7 @@ class AENet(nn.Module):
         )
 
         if flag_step2:
-            self.conv_down2_0 = self.convsblocks(1, self.num_filter * 1, act_fnc)
+            self.conv_down2_0 = self.convsblocks(2, self.num_filter * 1, act_fnc)
             self.pool2_0 = self.poolblock()
 
             for i in range(self.n_blocks):
@@ -88,8 +88,15 @@ class AENet(nn.Module):
         pool = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
         return pool
 
+    #x2: a list of fidst
+    #kcam : a list of kcams
+    def forward(self, x, inp=3, k=1, flag_step2=True,x2_list=0,kcam_list=0):
+        #construct x2 from scalars
+        bs,_,h,w=x.shape
+        x2=torch.ones(bs,1,h,w).to(x.device)
+        for i,fd in enumerate(x2_list):
+            x2[i,0,:,:]=fd
 
-    def forward(self, x, inp=3, k=1, flag_step2=True,kcam=0):
         down1 = []
         pool_temp = []
         for j in range(self.n_blocks + 1):
@@ -148,12 +155,9 @@ class AENet(nn.Module):
                     else:
                         blur = torch.cat([out, out_col], dim=1)
         if flag_step2:
-            if type(kcam) is torch.Tensor:
-                # print('before kcam:'+str(torch.mean(blur)))
-                out=blur*kcam
-                # print('after kcam:'+str(torch.mean(out)))
-            else:
-                out=blur
+            out=blur
+            for i,kcam in enumerate(kcam_list):
+                out[i,0,:,:]=blur[i,0,:,:]*kcam
             
             down2 = []
             pool_temp = []
@@ -164,7 +168,7 @@ class AENet(nn.Module):
                         joint_pool = torch.cat([pool_temp[0], pool_max[0]], dim=1)
                         pool_temp.pop(0)
                     else:
-                        joint_pool = torch.cat([out[:, 1 * i:1 * (i + 1), :, :]], dim=1)
+                        joint_pool = torch.cat([out[:, 1 * i:1 * (i + 1), :, :],x2[:, 1 * i:1 * (i + 1), :, :]], dim=1)
 
                     conv = self.__getattr__('conv_down2_' + str(j + 0))(joint_pool)
                     down_temp.append(conv)
