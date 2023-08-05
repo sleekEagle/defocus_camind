@@ -35,7 +35,7 @@ logger.info(args)
 
 #get dataloaders
 crop_size=(args.crop_h, args.crop_w)
-val_dataset=nyudepthv2.nyudepthv2(data_path=args.data_path,rgb_dir=args.eval_test_rgb_dir,depth_dir=args.depth_dir,crop_size=crop_size,is_blur=args.is_blur,is_train=False)
+val_dataset=nyudepthv2.nyudepthv2(data_path=args.data_path,rgb_dir_list=args.eval_test_rgb_dir,depth_dir=args.depth_dir,crop_size=crop_size,is_blur=args.is_blur,is_train=False)
 val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=1,
                                          num_workers=0,pin_memory=True)
 
@@ -55,22 +55,22 @@ model_params = model.parameters()
 criterion=torch.nn.MSELoss()
 model.eval()
 
-#f in mm
-train_f=float(args.eval_trained_rgb_dir.split('_')[-3])
-#fdist in m
-train_fdist=float(args.eval_trained_rgb_dir.split('_')[-1])
+# #f in mm
+# train_f=float(args.eval_trained_rgb_dir.split('_')[-3])
+# #fdist in m
+# train_fdist=float(args.eval_trained_rgb_dir.split('_')[-1])
 
-test_f=float(args.eval_test_rgb_dir[0].split('_')[-3])
-test_fdist=float(args.eval_test_rgb_dir[0].split('_')[-1])
+# test_f=float(args.eval_test_rgb_dir[0].split('_')[-3])
+# test_fdist=float(args.eval_test_rgb_dir[0].split('_')[-1])
 
-kcam=train_f**2/test_f**2 * (test_fdist-test_f*1e-3)
+# kcam=train_f**2/test_f**2 * (test_fdist-test_f*1e-3)
 
 
-result=test.validate_dist(val_loader,model,criterion,0,args,min_dist=0.0,max_dist=2.0,kcam=(test_fdist-test_f*1e-3))
+result=test.validate_dist(val_loader,model,criterion,0,args,min_dist=0.0,max_dist=2.0)
 print(result)
 
-for n in range(0,100):
-    kcam=n/10.
-    print('kcam='+str(kcam))
-    result=test.validate_dist(val_loader,model,criterion,0,args,min_dist=0.0,max_dist=2.0,kcam=kcam)
-    print(result)
+# for n in range(0,100):
+#     kcam=n/10.
+#     print('kcam='+str(kcam))
+#     result=test.validate_dist(val_loader,model,criterion,0,args,min_dist=0.0,max_dist=2.0,kcam=kcam)
+#     print(result)

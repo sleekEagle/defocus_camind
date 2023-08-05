@@ -159,7 +159,7 @@ class AENet(nn.Module):
             for i,kcam in enumerate(kcam_list):
                 out[i,0,:,:]=blur[i,0,:,:]*kcam
             
-            down2 = []
+            down2 = []  
             pool_temp = []
             for j in range(self.n_blocks + 1):
                 down_temp = []

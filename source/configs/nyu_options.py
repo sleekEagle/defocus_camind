@@ -30,6 +30,6 @@ class NYUOptions(BaseOptions):
         # parser.add_argument('--resume_from', type=str, default='C:\\Users\\lahir\\Documents\\refocused_f_50_fdist_2.tar')
 
         parser.add_argument('--eval_trained_rgb_dir', type=str, default='refocused_f_50_fdist_2')
-        parser.add_argument('--eval_test_rgb_dir',  nargs="+", default=['refocused_f_25_fdist_2'])
-        parser.add_argument('--trained_model', type=str, default="C:\\Users\\lahir\\models\\camind\\refocused_f_50_fdist_2.tar")
+        parser.add_argument('--eval_test_rgb_dir',  nargs="+", default=['refocused_f_75_fdist_2'])
+        parser.add_argument('--trained_model', type=str, default="C:\\Users\\lahir\\Documents\\f_50_fdist_2.tar")
         return parser
