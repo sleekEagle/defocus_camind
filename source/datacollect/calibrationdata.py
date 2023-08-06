@@ -8,16 +8,16 @@
 # examples/python/reconstruction_system/sensors/azure_kinect_recorder.py
 
 import argparse
-import datetime
 import open3d as o3d
 import os
 import glob
 import os.path
-import time
+import numpy as np
+from PIL import Image
 
 parser = argparse.ArgumentParser(description='Azure kinect mkv recorder.')
 parser.add_argument('--config', type=str, default=r'C:\Users\lahir\code\defocus_camind\source\datacollect\kinect_calib.json',help='input json kinect config')
-parser.add_argument('--output', type=str, default='C:\\Users\\lahir\\data\\calib_images\\',help='output mkv filename')
+parser.add_argument('--output', type=str, default='C:\\Users\\lahir\\data\\kinectmobile\\',help='output mkv filename')
 parser.add_argument('--list',
                     action='store_true',
                     help='list available azure kinect sensors')
@@ -29,7 +29,30 @@ parser.add_argument('-a',
                     '--align_depth_to_color',
                     action='store_true',
                     help='enable align depth image to color')
+parser.add_argument('--kinectmode', type=str, nargs='+', help='store kinect depth or color or both',
+                    default=['depth'])
+parser.add_argument('--sensor', type=str, nargs='+', help='store kinect depth or color or both',
+                    default=['kinect'])
 args = parser.parse_args()
+
+#create directories if they are not there
+if 'kinect' in args.sensor:
+    kdir=os.path.join(args.output,'kinect')
+    if not os.path.exists(kdir):
+        os.makedirs(kdir)
+    if 'depth' in args.kinectmode:
+        depthdir=os.path.join(kdir,'depth')
+        if not os.path.exists(depthdir):
+            os.makedirs(depthdir)
+    if 'color' in args.kinectmode:
+        colordir=os.path.join(kdir,'rgb')
+        if not os.path.exists(colordir):
+            os.makedirs(colordir)
+if 'mobile' in args.sensor:
+    adir=os.path.join(args.output,'OpenCamera')
+    if not os.path.exists(adir):
+        os.makedirs(adir)
+
 
 class RecorderWithCallback:
 
@@ -60,8 +83,8 @@ class RecorderWithCallback:
 
         self.recorder.close_record()
 
-
-def take_kinect_photo(img_n):    
+#mode : color or depth
+def take_kinect_photo(img_n,mode=['color']):    
     if args.list:
         o3d.io.AzureKinectSensor.list_devices()
         exit()
@@ -91,7 +114,11 @@ def take_kinect_photo(img_n):
     while not reader.is_eof():
         rgbd = reader.next_frame()
         if args.output is not None and rgbd is not None:
-            o3d.io.write_image(os.path.join(args.output,"kinect",str(img_n)+'.jpg'), rgbd.color)
+            if 'color' in mode:
+                o3d.io.write_image(os.path.join(colordir,str(img_n)+'.jpg'), rgbd.color)
+            if 'depth' in mode:
+                depthimg=Image.fromarray(np.asarray(rgbd.depth))
+                depthimg.save(os.path.join(depthdir,str(img_n)+'.png'))
             break
     reader.close()
 
@@ -123,14 +150,35 @@ def take_open_camera_photo(img_n):
     out=os.rename(max_file,folder_path+'\\'+str(img_n)+'.jpg')
     return out
 
+#check if all the directories have the same number of files
+n_kinect_rgb,n_kinect_depth,n_android=-1,-1,-1
+try:
+    n_kinect_rgb=len(os.listdir(colordir))
+except:
+    pass
+try:
+     n_kinect_depth=len(os.listdir(depthdir))
+except:
+    pass
+try:
+    n_android=len(os.listdir(adir))
+except:
+    pass
 
-n_kinect=len(os.listdir(os.path.join(args.output,'kinect')))
-n_android=len(os.listdir(os.path.join(args.output,'OpenCamera')))
-assert n_kinect==n_android , "image directories are corrupted. Retake images"
-next_n=n_android+1
+numlist=[n_kinect_rgb,n_kinect_depth,n_android]
+numlist_selected=[item for item in numlist if item>=0]
+assert len(numlist_selected)>0,'need to use at least one sensor'
+for i,item in enumerate(numlist_selected):
+    if i==0:
+        first=numlist_selected[0]
+        continue
+    assert item==first,'Directories have different number of files. Please check and correct them.'
+next_n=first+1
 
-take_kinect_photo(next_n)
-take_open_camera_photo(next_n)
+if 'kinect' in args.sensor:
+    take_kinect_photo(next_n,args.kinectmode)
+if 'mobile' in args.sensor:
+    take_open_camera_photo(next_n)
 
 
 
