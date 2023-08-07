@@ -30,9 +30,9 @@ parser.add_argument('-a',
                     action='store_true',
                     help='enable align depth image to color')
 parser.add_argument('--kinectmode', type=str, nargs='+', help='store kinect depth or color or both',
-                    default=['depth'])
+                    default=['color'])
 parser.add_argument('--sensor', type=str, nargs='+', help='store kinect depth or color or both',
-                    default=['kinect'])
+                    default=['kinect,mobile'])
 args = parser.parse_args()
 
 #create directories if they are not there
