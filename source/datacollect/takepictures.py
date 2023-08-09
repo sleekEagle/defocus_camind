@@ -14,6 +14,8 @@ import glob
 import os.path
 import numpy as np
 from PIL import Image
+import simpleaudio 
+import time
 
 parser = argparse.ArgumentParser(description='Azure kinect mkv recorder.')
 parser.add_argument('--config', type=str, default=r'C:\Users\lahir\code\defocus_camind\source\datacollect\kinect_calib.json',help='input json kinect config')
@@ -25,14 +27,14 @@ parser.add_argument('--device',
                     type=int,
                     default=0,
                     help='input kinect device id')
-parser.add_argument('-a',
-                    '--align_depth_to_color',
-                    action='store_true',
-                    help='enable align depth image to color')
 parser.add_argument('--kinectmode', type=str, nargs='+', help='store kinect depth or color or both',
-                    default=['color'])
+                    default=['color','depth'])
 parser.add_argument('--sensor', type=str, nargs='+', help='store kinect depth or color or both',
-                    default=['kinect,mobile'])
+                    default=['kinect','mobile'])
+parser.add_argument('--n_imgs',
+                    type=int,
+                    default=2,
+                    help='number of images to obtain. -1 for infinity')
 args = parser.parse_args()
 
 #create directories if they are not there
@@ -53,6 +55,15 @@ if 'mobile' in args.sensor:
     if not os.path.exists(adir):
         os.makedirs(adir)
 
+#setting up audio clips to play
+ROOT_DIR = os.path.dirname(
+    os.path.abspath(__name__)
+)
+audio_path=os.path.join(ROOT_DIR,'audioclips')
+
+camera_obj = simpleaudio.WaveObject.from_wave_file(os.path.join(audio_path,'camera.wav'))
+ready_obj = simpleaudio.WaveObject.from_wave_file(os.path.join(audio_path,'ready.wav'))
+sad_obj = simpleaudio.WaveObject.from_wave_file(os.path.join(audio_path,'sad.wav'))
 
 class RecorderWithCallback:
 
@@ -83,8 +94,7 @@ class RecorderWithCallback:
 
         self.recorder.close_record()
 
-#mode : color or depth
-def take_kinect_photo(img_n,mode=['color']):    
+if 'kinect' in args.sensor:
     if args.list:
         o3d.io.AzureKinectSensor.list_devices()
         exit()
@@ -101,9 +111,12 @@ def take_kinect_photo(img_n,mode=['color']):
     if device < 0 or device > 255:
         print('Unsupported device id, fall back to 0')
         device = 0
+    r = RecorderWithCallback(config, device, filename,True)
 
-    r = RecorderWithCallback(config, device, filename,
-                             args.align_depth_to_color)
+#mode : color or depth
+def take_kinect_photo(img_n,mode=['color']):    
+    
+    
     r.run()
 
     #init reader
@@ -139,8 +152,10 @@ def take_open_camera_photo(img_n):
     out=os.system(adb_path+' shell rm sdcard/DCIM/OpenCamera/*')
     #take a photo
     os.system(adb_path + ' shell input tap 2206 515')
-    out=os.system(adb_path + ' shell ls sdcard/DCIM/OpenCamera/')
+    time.sleep(0.2)
+    # out=os.system(adb_path + ' shell ls sdcard/DCIM/OpenCamera/')
     pull_out=os.system(adb_path + ' pull sdcard/DCIM/OpenCamera/ ' + args.output)
+    time.sleep(0.2)
     if not pull_out==0:
         return -1
     folder_path =args.output+'OpenCamera'
@@ -148,37 +163,69 @@ def take_open_camera_photo(img_n):
     files = glob.glob(folder_path + file_type)
     max_file = max(files, key=os.path.getctime)
     out=os.rename(max_file,folder_path+'\\'+str(img_n)+'.jpg')
+    time.sleep(0.2)
     return out
 
-#check if all the directories have the same number of files
-n_kinect_rgb,n_kinect_depth,n_android=-1,-1,-1
-try:
-    n_kinect_rgb=len(os.listdir(colordir))
-except:
-    pass
-try:
-     n_kinect_depth=len(os.listdir(depthdir))
-except:
-    pass
-try:
-    n_android=len(os.listdir(adir))
-except:
-    pass
+def files_corrupted():
+    play_obj = sad_obj.play()
+    play_obj.wait_done()
+    print('Directories have different number of files. Please check and correct them.')
 
-numlist=[n_kinect_rgb,n_kinect_depth,n_android]
-numlist_selected=[item for item in numlist if item>=0]
-assert len(numlist_selected)>0,'need to use at least one sensor'
-for i,item in enumerate(numlist_selected):
-    if i==0:
-        first=numlist_selected[0]
-        continue
-    assert item==first,'Directories have different number of files. Please check and correct them.'
-next_n=first+1
 
-if 'kinect' in args.sensor:
-    take_kinect_photo(next_n,args.kinectmode)
-if 'mobile' in args.sensor:
-    take_open_camera_photo(next_n)
+current_n=0
+while(True):
+    #check if all the directories have the same number of files
+    n_kinect_rgb,n_kinect_depth,n_android=-1,-1,-1
+    try:
+        n_kinect_rgb=len(os.listdir(colordir))
+    except:
+        pass
+    try:
+        n_kinect_depth=len(os.listdir(depthdir))
+    except:
+        pass
+    try:
+        n_android=len(os.listdir(adir))
+    except:
+        pass
+
+    numlist=[n_kinect_rgb,n_kinect_depth,n_android]
+    numlist_selected=[item for item in numlist if item>=0]
+    assert len(numlist_selected)>0,'need to use at least one sensor'
+    for i,item in enumerate(numlist_selected):
+        if i==0:
+            first=numlist_selected[0]
+            continue
+        assert item==first,files_corrupted()
+    next_n=first+1
+
+    if 'kinect' in args.sensor:
+        take_kinect_photo(next_n,args.kinectmode)
+    if 'mobile' in args.sensor:
+        take_open_camera_photo(next_n)
+    
+    play_obj = camera_obj.play()
+    play_obj.wait_done()
+
+    current_n+=1
+    if current_n==args.n_imgs:
+        break
+    
+    #sleep for a bit. Let the human get ready.
+    time.sleep(3)
+    play_obj = ready_obj.play()
+    play_obj.wait_done()
+    time.sleep(1)
+
+
+    
+
+
+
+
+
+
+
 
 
 
