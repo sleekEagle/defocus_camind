@@ -1,6 +1,5 @@
-function final = transform_depth_img(stereoParams,depth_path,rgb_path)
+function final = transform_depth_img(stereoParams,depthImage,mobileImg)
     %loading calibration data
-    depthImage = imread(depth_path);
     
     cam1intr=stereoParams.CameraParameters1.K;
     focalLength    = [cam1intr(1,1) cam1intr(1,1)]; 
@@ -52,9 +51,9 @@ function final = transform_depth_img(stereoParams,depth_path,rgb_path)
     end
     
     %remove assen balana points
+    
     %load the related rgb image
-    A=imread(rgb_path);
-    [L,N] = superpixels(A,500);
+    [L,N] = superpixels(mobileImg,500);
     BW = boundarymask(L);
     idx = label2idx(L);
     

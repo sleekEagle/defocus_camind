@@ -212,10 +212,11 @@ while(True):
         break
     
     #sleep for a bit. Let the human get ready.
-    time.sleep(3)
+    time.sleep(1)
     play_obj = ready_obj.play()
     play_obj.wait_done()
     time.sleep(1)
+    print(str(current_n)+" done.")
 
 
     
