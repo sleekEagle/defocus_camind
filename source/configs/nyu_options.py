@@ -23,7 +23,7 @@ class NYUOptions(BaseOptions):
         parser.add_argument('--val_freq', type=int, default=1)
         parser.add_argument('--save_model', action='store_true')    
 
-        parser.add_argument('--data_path', type=str, default='D:\\data\\')
+        parser.add_argument('--data_path', type=str, default='C:\\Users\\lahir\\data\\kinectmobile\\')
         parser.add_argument('--rgb_dir', nargs="+", default=['refocused_f_50_fdist_2','refocused_f_10_fdist_3'])
         parser.add_argument('--depth_dir', type=str, default='rawDepth')
         parser.add_argument('--resume_from', type=str, default='')

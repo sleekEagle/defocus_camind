@@ -19,7 +19,7 @@ def get_blur(s1,s2,f):
     return blur
 
 #selected_dirs: what rgb directories are being selected : a list of indices of sorted dir names
-class nyudepthv2(BaseDataset):
+class mobilekinect(BaseDataset):
     def __init__(self, data_path,is_train=True,is_blur=False, crop_size=(480, 480)):
         super().__init__(crop_size)
 
@@ -59,11 +59,12 @@ class nyudepthv2(BaseDataset):
             else:
                 image,depth = self.augment_training_data(image, depth)
         else:
-            image,depth = self.augment_test_data(image, depth)
+            #image,depth = self.augment_test_data(image, depth)
+            image,depth = self.augment_training_data_blur(image, depth)
 
         depth = depth / 1000.0  # convert in meters
         blur=get_blur(2.0,depth,25e-3)
-        return {'image': image, 'depth': depth, 'blur':blur}
+        return {'image': image, 'depth': depth, 'blur':blur,'kcam':1.0,'fdist':2.0}
 
 # for st_iter, sample_batch in enumerate(loader):
 #         input_RGB = sample_batch['image']
@@ -138,7 +139,7 @@ def get_loader_stats(loader,depthrange=2.0):
 
 
 # data_path='C:\\Users\\lahir\\data\\kinectmobile\\'
-# train_dataset=nyudepthv2(data_path=data_path,is_train=True)
+# train_dataset=mobilekinect(data_path=data_path,is_train=True)
 # train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=1,
 #                                            num_workers=0,pin_memory=True)
 

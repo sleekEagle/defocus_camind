@@ -203,3 +203,71 @@ def validate_dist(val_loader, model, criterion_d, device_id, args,min_dist=0.0,m
 
     loss_d = ddp_logger.meters['loss_d'].global_avg
     return result_metrics,loss_d
+
+
+
+
+#provides distance wise error with 2d shifting
+def validate_dist_mobilekinect(val_loader, model, criterion_d, device_id, args,min_dist=0.0,max_dist=10.0,base_f=25e-3):
+
+    if device_id == 0:
+        depth_loss = logging.AverageMeter()
+    model.eval()
+
+
+    ddp_logger = utils.MetricLogger()
+    result_metrics = {}
+    for metric in metric_name:
+        result_metrics[metric] = 0.0
+
+    for batch_idx, batch in enumerate(val_loader):
+        input_RGB=batch['image'].float().to(device_id)
+        depth_gt=batch['depth'].to(device_id)
+        base_f=25*1e-3
+        f=25*1e-3
+        fdist=batch['fdist']
+        kcam=(fdist-f)*(base_f**2)/(f**2)
+        x2=fdist.tolist()
+        kcam=kcam.tolist()
+
+        #if(batch_idx>10): break
+        with torch.no_grad():
+            bs, _, h, w = input_RGB.shape
+            assert bs == 1
+            pred_d,_ = model(input_RGB,flag_step2=True,x2_list=x2,kcam_list=kcam)
+
+        pred_d = (pred_d.squeeze()).squeeze()
+        depth_gt = depth_gt.squeeze()
+
+        depth_gt[depth_gt<min_dist]=0.0
+        depth_gt[depth_gt>max_dist]=0.0
+        #if(torch.sum(depth_gt)==0.0):
+        #    print('all zero!')
+
+        loss_d = criterion_d(pred_d, depth_gt)
+
+        ddp_logger.update(loss_d=loss_d.item())
+
+        if device_id == 0:
+            depth_loss.update(loss_d.item(), input_RGB.size(0))
+
+        #cropping_img filters out valid depth values. No zero depths after this
+        pred_crop, gt_crop = metrics.cropping_img(args, pred_d, depth_gt)
+        computed_result = metrics.eval_depth(pred_crop, gt_crop)
+        if math.isnan(computed_result['rmse']):
+            continue
+
+        ddp_logger.update(**computed_result)
+        for key in result_metrics.keys():
+            result_metrics[key] += computed_result[key]
+
+    for key in result_metrics.keys():
+        result_metrics[key] = result_metrics[key] / (batch_idx + 1)
+
+    #ddp_logger.synchronize_between_processes()
+
+    for key in result_metrics.keys():
+        result_metrics[key] = ddp_logger.meters[key].global_avg
+
+    loss_d = ddp_logger.meters['loss_d'].global_avg
+    return result_metrics,loss_d
