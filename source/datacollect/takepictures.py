@@ -19,7 +19,7 @@ import time
 
 parser = argparse.ArgumentParser(description='Azure kinect mkv recorder.')
 parser.add_argument('--config', type=str, default=r'C:\Users\lahir\code\defocus_camind\source\datacollect\kinect_calib.json',help='input json kinect config')
-parser.add_argument('--output', type=str, default='C:\\Users\\lahir\\data\\kinectmobile\\',help='output mkv filename')
+parser.add_argument('--output', type=str, default='C:\\Users\\lahir\\data\\kinecthands\\',help='output mkv filename')
 parser.add_argument('--list',
                     action='store_true',
                     help='list available azure kinect sensors')
@@ -213,9 +213,9 @@ while(True):
     
     #sleep for a bit. Let the human get ready.
     time.sleep(1)
-    play_obj = ready_obj.play()
-    play_obj.wait_done()
-    time.sleep(1)
+    # play_obj = ready_obj.play()
+    # play_obj.wait_done()
+    # time.sleep(1)
     print(str(current_n)+" done.")
 
 

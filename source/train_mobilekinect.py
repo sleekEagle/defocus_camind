@@ -113,19 +113,9 @@ for i in range(800):
             print(result)
             logging.info(result)
             modelname="_".join([str(element)[10:] for element in args.rgb_dir])
+            modelname+=('_bs_'+str(args.batch_size))
             torch.save({
                 'state_dict': model.state_dict()
                 },  os.path.join(os.path.abspath(args.resultspth),(modelname)+'.tar'))
             
             model.train()
-
-
-for batch_idx, batch in enumerate(val_loader):
-    input_RGB=batch['image'].float().to(device_id)
-    depth_gt=batch['depth'].to(device_id)
-    gt_blur=batch['blur'].to(device_id)
-    fdist=batch['fdist']
-    kcam=(fdist-f)*(base_f**2)/(f**2)
-    x2=fdist.tolist()
-    kcam=kcam.tolist()
-    break
