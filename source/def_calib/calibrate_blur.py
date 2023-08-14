@@ -199,7 +199,3 @@ errors=get_reprojection_errors(objpoints_selected,imgpts_selected,rvecs,tvecs,mt
 
 
 
-
-
-
-
