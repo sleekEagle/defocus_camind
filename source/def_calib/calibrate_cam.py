@@ -18,8 +18,7 @@ def get_reprojection_errors(objpoints,imgpoints,rvecs,tvecs,mtx,dist):
 calibrate with an asymetric circular grid.
 d : distance between two adjecent circles (the longer distance) in mm
 '''
-def calibrate(photos_dir,d=42.5,grid_size=(4,11)):
-    #calibrating with the asymetric circular grid 
+def get_obj_points(d=42.5,grid_size=(4,11)):
     objp = np.zeros((grid_size[0]*grid_size[1], 3), np.float32)
     #distance between two circle centers in mm 
     for i in range(grid_size[1]):
@@ -28,6 +27,11 @@ def calibrate(photos_dir,d=42.5,grid_size=(4,11)):
             x_value=i*d/2
             y_value=j*d + d/2*(i%2)
             objp[indx,:]=[x_value,y_value,0]
+    return objp
+
+def calibrate(photos_dir,d=42.5,grid_size=(4,11)):
+    #calibrating with the asymetric circular grid 
+    objp=get_obj_points(d,grid_size)
 
     # Arrays to store object points and image points from all the images.
     objpoints = [] # 3d point in real world space
