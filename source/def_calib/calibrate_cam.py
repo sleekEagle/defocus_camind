@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 import os
 
+photos_dir='C:\\Users\\lahir\\data\\calibration\\kinect_calib\\kinect\\rgb\\'
+out_path='C:\\Users\\lahir\\data\\calibration\\kinect_calib\\kinect\\'
+
 def get_reprojection_errors(objpoints,imgpoints,rvecs,tvecs,mtx,dist):
     errors=[]
     for i in range(len(objpoints)):
@@ -59,22 +62,21 @@ def calibrate(photos_dir,d=42.5,grid_size=(4,11)):
     return ret, mtx, dist, rvecs, tvecs,objpoints,imgpoints,gray.shape[::-1]
 
 #calibrate the first round
-photos_dir='C:\\Users\\lahir\\data\\calibration\\kinect_calib\\kinect\\rgb\\'
-ret, mtx, dist, rvecs,tvecs,objpoints,imgpoints,imshape=calibrate(photos_dir,d=151)
-errors=get_reprojection_errors(objpoints,imgpoints,rvecs,tvecs,mtx,dist)
+if __name__ == "__main__":
+    ret, mtx, dist, rvecs,tvecs,objpoints,imgpoints,imshape=calibrate(photos_dir,d=151)
+    errors=get_reprojection_errors(objpoints,imgpoints,rvecs,tvecs,mtx,dist)
 
-thr_error=0.2
-valid_args=np.argwhere(errors<thr_error)
-#recalibrate with the selected images
-objpoints_selected=[pt for i,pt in enumerate(objpoints) if i in valid_args]
-imgpts_selected=[pt for i,pt in enumerate(imgpoints) if i in valid_args]
-ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints_selected, imgpts_selected,imshape, None, None)
-errors=get_reprojection_errors(objpoints_selected,imgpts_selected,rvecs,tvecs,mtx,dist)
+    thr_error=0.2
+    valid_args=np.argwhere(errors<thr_error)
+    #recalibrate with the selected images
+    objpoints_selected=[pt for i,pt in enumerate(objpoints) if i in valid_args]
+    imgpts_selected=[pt for i,pt in enumerate(imgpoints) if i in valid_args]
+    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints_selected, imgpts_selected,imshape, None, None)
+    errors=get_reprojection_errors(objpoints_selected,imgpts_selected,rvecs,tvecs,mtx,dist)
 
-#save the calibration matrices
-out_path='C:\\Users\\lahir\\data\\calibration\\kinect_calib\\kinect\\'
-np.save(os.path.join(out_path,'k.npy'),mtx)
-np.save(os.path.join(out_path,'dist.npy'),dist)
+    #save the calibration matrices
+    np.save(os.path.join(out_path,'k.npy'),mtx)
+    np.save(os.path.join(out_path,'dist.npy'),dist)
 
 
 
