@@ -2,13 +2,149 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
+import sys
 import os
+sys.path.append(os.getcwd())
 import def_calib.calibrate_cam
-from sklearn.linear_model import LinearRegression,RANSACRegressor
+import math
+from scipy import integrate
+
+grid_size=(4,11)
+fdist=2.0
 
 calib_mtx_pth='C:\\Users\\lahir\\data\\calibration\\kinect_calib\\kinect\\k.npy'
 dist_mtx_pth='C:\\Users\\lahir\\data\\calibration\\kinect_calib\\kinect\\dist.npy'
-img_dir='C:\\Users\\lahir\\data\\calibration\\kinect_blur\\kinect\\blur_calib\\f_25\\'
+img_dir='C:\\Users\\lahir\\data\\calibration\\kinect_blur\\kinect2\\kinect\\cameras\\f_50\\'
+
+
+'''
+|s2-s1|/s2/(s1-f) * f**2/N/px*out_pix/sensor_pix = k_r * sigma
+f**2/N/px*out_pix/sensor_pix/(s1-f) = sigma * s2/|s2-s1|
+k/(s1-f) = sigma * s2/|s2-s1|
+k_cam = sigma * s2/|s2-s1|
+
+This code estiamtes the k_cam
+focal length (fdist or s1 in the equations above) must be constant for all the images taken
+'''
+
+#read calibration and distortion matrices
+mtx=np.load(calib_mtx_pth)
+dist=np.load(dist_mtx_pth)  
+
+blurred_pth=os.path.join(img_dir,'undist')
+focused_pth=os.path.join(img_dir,'rgb')
+
+def imshow(img):
+    cv2.imshow('image',img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+#estimate sigma from an image segment
+def est_sigma(img):
+    center=(int(img.shape[0]/2),int(img.shape[1]/2))
+    explore_dist=int(img.shape[0]/10)
+    I_list=[]
+    max_list=[]
+    for ex in range(-explore_dist,explore_dist):
+        data=img[center[0]+ex,:]*-1
+        max_list.append(max(data))
+        data=(data-min(data))/(max(data)-min(data))
+        #where are the falling
+        falling=(data<0.95)*1.0
+        data_=data*falling
+        I=integrate.simpson(data_,np.arange(0,len(data)))
+        I_list.append(I)
+    #remove outliers
+    I_list=np.array(I_list)
+    d = np.abs(I_list - np.median(I_list))
+    mdev = np.median(d)
+    s = d/mdev if mdev else np.zeros(len(d))
+    selected_I=I_list[s<1.0]
+    I_est=np.mean(selected_I)
+    sigma=I_est/np.sqrt(2*math.pi)
+    return sigma
+
+def get_centers(gray):
+    #detect circle centers
+    grid_size=(4,11)
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+    ret, corners = cv2.findCirclesGrid(gray, grid_size,None,flags=cv2.CALIB_CB_ASYMMETRIC_GRID)
+    if ret:
+        corners2 = cv2.cornerSubPix(gray,corners,(11,11),(-1,-1),criteria)
+        return corners2
+    else:
+        return -1
+    
+#get distances to all coordinated in centers
+#assume the points are are asymetric circular patters with 
+#d as the longer distance between adjecent circle centers
+def get_center_dist(mtx,dist,centers):
+    objp=def_calib.calibrate_cam.get_obj_points(d=151)
+    ret,rvecs, tvecs = cv2.solvePnP(objp, centers, mtx, dist)
+    R,_=cv2.Rodrigues(rvecs)
+    objp_t=np.transpose(objp)
+    #object points in cam coordinate system
+    cam_pos=np.matmul(R,objp_t) + tvecs
+    center_dists=np.sqrt(np.sum(np.square(cam_pos),axis=0))
+    return center_dists
+
+def get_sigma_list(img):
+    centers_=get_centers(img)
+    center_dist=get_center_dist(mtx,dist,centers_)
+    center_dist=center_dist*1e-3
+    # centers_=get_centers(blurred_img)
+    x_range=np.max(centers_[:,0,0])-np.min(centers_[:,0,0])
+    y_range=np.max(centers_[:,0,1])-np.min(centers_[:,0,1])
+    bound=min(x_range,y_range)/max(grid_size)*1.2
+    sigma_list=[]
+    for k in range(len(centers_)):
+        x,y=centers_[k,0,0],centers_[k,0,1]
+        seg=img[int(y-bound):int(y+bound),int(x-bound):int(x+bound)]
+        #get sigma for this segment
+        sigma_=est_sigma(seg)
+        sigma_list.append(sigma_)
+    sigma_list=np.array(sigma_list)
+    return sigma_list,center_dist
+    
+
+focused_files=[os.path.join(focused_pth,f) for f in os.listdir(focused_pth) if ((f[-3:]=='png') or (f[-3:]=='jpg'))]
+focused_files.sort()
+blurred_files=[os.path.join(blurred_pth,f) for f in os.listdir(blurred_pth) if ((f[-3:]=='png') or (f[-3:]=='jpg'))]
+blurred_files.sort()
+kcam_list=[]
+print('number of images = '+str(len(blurred_files)))
+for i,file in enumerate(blurred_files):
+    # focused_img=cv2.imread(file,cv2.IMREAD_GRAYSCALE)
+    blurred_img=cv2.imread(file,cv2.IMREAD_GRAYSCALE)
+    focused_img=cv2.imread(focused_files[i],cv2.IMREAD_GRAYSCALE)
+    blurred_sigmas,blurred_center_dist=get_sigma_list(blurred_img)
+    focused_sigmas,focused_center_dist=get_sigma_list(focused_img)
+
+    # print(np.mean(np.array(center_dist)))
+    blurred_kcam=blurred_sigmas*blurred_center_dist/np.abs(blurred_center_dist - fdist)
+    focused_kcam=focused_sigmas*focused_center_dist/np.abs(focused_center_dist - fdist)
+    kcam_=blurred_kcam-focused_kcam
+    kcam_list=kcam_list+list(kcam_)
+
+print('number of k_s values obtained = '+str(len(kcam_list)))
+#remove outliers from the ks
+kcam_list=np.array(kcam_list)
+d = np.abs(kcam_list - np.median(kcam_list))
+mdev = np.median(d)
+s = d/mdev if mdev else np.zeros(len(d))
+selected_kcams=kcam_list[s<0.5]
+print('number of k_s values retained after outlier removal = '+str(len(selected_kcams)))
+kcam_est=np.mean(selected_kcams)
+print('k_cam_est = '+str(kcam_est))
+
+
+# f = np.array([10,20,25,30,40,50])
+# ks_est=[2.4,3.3,4.3,5.4,8.8,13.0]
+# x=((f*1e-3)**2)/(2-f*1e-3)
+
+# plt.plot(x,ks_est,'b-')
+# plt.show()
+
 
 def gaussian(x,sigma):
     g=np.exp(-1*(x)**2/(2*sigma**2))
@@ -29,17 +165,7 @@ def fit_sigma(data,guess=12):
     sigma_est=popt[0]
     return sigma_est
 
-def get_centers(img_path):
-    gray=cv2.imread(img_path,cv2.IMREAD_GRAYSCALE)
-    #detect circle centers
-    grid_size=(4,11)
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-    ret, corners = cv2.findCirclesGrid(gray, grid_size,None,flags=cv2.CALIB_CB_ASYMMETRIC_GRID)
-    if ret:
-        corners2 = cv2.cornerSubPix(gray,corners,(11,11),(-1,-1),criteria)
-        return corners2
-    else:
-        return -1
+
 
 def est_sigmas(img_path):
     gray=cv2.imread(img_path,cv2.IMREAD_GRAYSCALE)
@@ -50,8 +176,8 @@ def est_sigmas(img_path):
 
     if ret:
         corners2 = cv2.cornerSubPix(gray,corners,(11,11),(-1,-1),criteria)
-        # img = cv2.drawChessboardCorners(gray.copy(), grid_size, corners2,ret)
-        # cv2.imshow('I2',img)
+        img = cv2.drawChessboardCorners(gray.copy(), grid_size, corners2,ret)
+        # cv2.imshow('I2',seg)
         # cv2.waitKey(0)
         # cv2.destroyAllWindows()
 
@@ -105,7 +231,7 @@ def est_sigmas(img_path):
             d = np.abs(sigma_est - np.median(sigma_est))
             mdev = np.median(d)
             s = d/mdev if mdev else np.zeros(len(d))
-            selected_sigma=sigma_est[s<1]
+            selected_sigma=sigma_est[s<0.5]
             sigma=np.mean(selected_sigma)
             std=np.std(selected_sigma)
             sigma_list.append(sigma)
@@ -118,7 +244,7 @@ def est_sigmas(img_path):
 #remove distortions from the images and save them
 def undistort(mtx,dist,input_pth,out_pth):
     img_pths=os.listdir(input_pth)
-    img_pths=[img for img in img_pths if img[-3:]=='jpg']
+    img_pths=[img for img in img_pths if (img[-3:]=='png' or img[-3:]=='jpg')]
 
     for pth in img_pths:
         img = cv2.imread(os.path.join(input_pth,pth))
@@ -155,60 +281,3 @@ def get_center_dist(mtx,dist,centers):
     cam_pos=np.matmul(R,objp_t) + tvecs
     center_dists=np.sqrt(np.sum(np.square(cam_pos),axis=0))
     return center_dists
-
-
-#read calibration and distortion matrices
-mtx=np.load(calib_mtx_pth)
-dist=np.load(dist_mtx_pth)  
-
-blurred_pth=os.path.join(img_dir,'fdist2')
-focused_pth=os.path.join(img_dir,'focused')
-undist_pth=os.path.join(img_dir,'undistorted')
-undist_blurred_pth=os.path.join(undist_pth,'fdist2')
-undist_focused_pth=os.path.join(undist_pth,'focused')
-
-# undistort(mtx,dist,blurred_pth,undist_blurred_pth)
-# undistort(mtx,dist,focused_pth,undist_focused_pth)
-
-sigma_list_list,_=get_sigmas(undist_blurred_pth)
-#get center coordinates of images
-foc_pth=os.listdir(undist_focused_pth)
-foc_pth.sort()
-center_list=[]
-for p in foc_pth:
-    c=get_centers(os.path.join(undist_focused_pth,p))
-    center_list.append(c)
-
-#get the distances to the circle centers of all images and all circles
-center_dists=[]
-for center in center_list:
-    c=get_center_dist(mtx,dist,center)
-    center_dists.append(c)
-
-'''
-k * (s1-f) = |s1-s2|/(s2*sigma)
-'''
-#estimate k*(s1-f)
-#iterate through images
-ks_list=[]
-for i in range(len(center_dists)):
-    s2=center_dists[i]/1000.0
-    s1=2.0
-    sigma=sigma_list_list[i]
-    ks=np.abs(s1-s2)/(s2*sigma)
-    ks_list.append(ks)
-
-ks_list=np.array(ks_list)
-#remove outliers
-d = np.abs(ks_list - np.median(ks_list))
-mdev = np.median(d)
-s = d/mdev if mdev else np.zeros(len(d))
-selected_ks=ks_list[s<0.5]
-ks_est=np.mean(selected_ks)
-print("ks_est:"+str(ks_est))
-
-'''
-f 40 ks_est = 0.091885
-f 20 ks_est = 0.175
-f 25 ks_est=0.135890
-'''
