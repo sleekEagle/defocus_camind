@@ -8,7 +8,7 @@ from sklearn.linear_model import LinearRegression,RANSACRegressor
 
 calib_mtx_pth='C:\\Users\\lahir\\data\\calibration\\kinect_calib\\kinect\\k.npy'
 dist_mtx_pth='C:\\Users\\lahir\\data\\calibration\\kinect_calib\\kinect\\dist.npy'
-img_dir='C:\\Users\\lahir\\data\\calibration\\kinect_blur\\kinect\\blur_calib\\f_40\\'
+img_dir='C:\\Users\\lahir\\data\\calibration\\kinect_blur\\kinect\\blur_calib\\f_25\\'
 
 def gaussian(x,sigma):
     g=np.exp(-1*(x)**2/(2*sigma**2))
@@ -210,8 +210,5 @@ print("ks_est:"+str(ks_est))
 '''
 f 40 ks_est = 0.091885
 f 20 ks_est = 0.175
+f 25 ks_est=0.135890
 '''
-
-0.091885/0.1771
-
-((2-40e-3)/(40**2))/((2-20e-3)/(20**2))
