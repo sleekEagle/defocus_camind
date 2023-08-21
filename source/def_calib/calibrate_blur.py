@@ -120,13 +120,20 @@ for i,file in enumerate(blurred_files):
     blurred_sigmas,blurred_center_dist=get_sigma_list(blurred_img)
     focused_sigmas,focused_center_dist=get_sigma_list(focused_img)
 
+    blurred_sigmas_=np.sqrt(blurred_sigmas**2 - focused_sigmas**2)
+
     # print(np.mean(np.array(center_dist)))
-    blurred_kcam=blurred_sigmas*blurred_center_dist/np.abs(blurred_center_dist - fdist)
-    focused_kcam=focused_sigmas*focused_center_dist/np.abs(focused_center_dist - fdist)
-    kcam_=blurred_kcam-focused_kcam
+    # blurred_kcam=blurred_sigmas*blurred_center_dist/np.abs(blurred_center_dist - fdist)
+    # focused_kcam=focused_sigmas*focused_center_dist/np.abs(focused_center_dist - fdist)
+    # kcam_=blurred_kcam-focused_kcam*0.59
+
+    kcam_=blurred_sigmas_*blurred_center_dist/np.abs(blurred_center_dist - fdist)
+    
     kcam_list=kcam_list+list(kcam_)
 
 print('number of k_s values obtained = '+str(len(kcam_list)))
+
+kcam_list = [item for item in kcam_list if item >0]
 #remove outliers from the ks
 kcam_list=np.array(kcam_list)
 d = np.abs(kcam_list - np.median(kcam_list))
