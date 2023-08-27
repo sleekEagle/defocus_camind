@@ -96,7 +96,11 @@ def validate(val_loader, model, criterion_d, device_id, args):
 
 
 #provides distance wise error
-def validate_dist(val_loader, model, criterion_d, device_id, args,min_dist=0.0,max_dist=10.0,base_f=25e-3):
+'''
+this reads and calculate kcam value from the dataset if it is not explicitly given with kcam_exp.
+If kcam_exp is given it uses that value instead of reading from the dataset
+'''
+def validate_dist(val_loader, model, criterion_d, device_id, args,min_dist=0.0,max_dist=10.0,base_f=25e-3,kcam_exp=-1):
 
     if device_id == 0:
         depth_loss = logging.AverageMeter()
@@ -115,7 +119,15 @@ def validate_dist(val_loader, model, criterion_d, device_id, args,min_dist=0.0,m
         gt_blur=batch['blur'].to(device_id)
         f=batch['f']
         fdist=batch['fdist']
-        kcam=(fdist-f)*(base_f**2)/(f**2)
+        if kcam_exp==-1:
+            # print('fdist:'+str(fdist))
+            # print('f'+str(f))
+            # print('base_f:'+str(base_f))
+            kcam=(fdist-f)*(base_f**2)/(f**2)
+            # print(kcam)
+        else:
+            kcam=torch.ones_like(fdist)*kcam_exp
+
         x2=fdist.tolist()
         kcam=kcam.tolist()
 

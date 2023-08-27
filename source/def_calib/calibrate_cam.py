@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 import os
 
-photos_dir='C:\\Users\\lahir\\data\\calibration\\kinect_calib\\kinect\\rgb\\'
-out_path='C:\\Users\\lahir\\data\\calibration\\kinect_calib\\kinect\\'
+photos_dir='C:\\Users\\lahir\\data\\pixelcalib\\calib\\'
+out_path='C:\\Users\\lahir\\data\\pixelcalib\\'
 
 def get_reprojection_errors(objpoints,imgpoints,rvecs,tvecs,mtx,dist):
     errors=[]
@@ -63,7 +63,7 @@ def calibrate(photos_dir,d=42.5,grid_size=(4,11)):
 
 #calibrate the first round
 if __name__ == "__main__":
-    ret, mtx, dist, rvecs,tvecs,objpoints,imgpoints,imshape=calibrate(photos_dir,d=151)
+    ret, mtx, dist, rvecs,tvecs,objpoints,imgpoints,imshape=calibrate(photos_dir,d=29)
     errors=get_reprojection_errors(objpoints,imgpoints,rvecs,tvecs,mtx,dist)
 
     thr_error=0.2

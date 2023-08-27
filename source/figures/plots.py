@@ -248,37 +248,255 @@ f_50_kcams=np.array([12.84061875, 12.86787878, 12.61890009, 12.65971836, 12.7217
 
 #obtain scaled GT kcam calues to compare to the estimated values
 fdist=2
+N=1
+px=36*1e-6
 f=np.array([10,20,25,30,40,50])
-kcam_GT=(f*1e-3)**2/(fdist-f*1e-3)
-# k_cams_est=np.array([0.8,1.58,2.6,3.79,7.18,11.33])
-# k_cams_est=np.array([0.84,1.14,1.3,1.5,1.8,1.9])
-# k_cams_est=np.array([1.09,1.409,1.59,1.82,2.12,2.301])
+kcam_GT=(f*1e-3)**2/(fdist-f*1e-3)/N/px
 k_cams_est=np.array([0.89,2.01,3.28,4.72,8.34,12.66])
-
 plt.plot(kcam_GT,k_cams_est)
 plt.show()
 
-
-from sklearn.linear_model import RANSACRegressor
-kcam_GT=np.expand_dims(kcam_GT,1)
-reg = RANSACRegressor(random_state=0).fit(kcam_GT, k_cams_est)
-reg.estimator_.coef_
-reg.estimator_.intercept_
-
-
-
-scaled_kcam_est=k_cams_est/k_cams_est[0]*kcam_GT[0]
-plt.plot(kcam_GT,scaled_kcam_est,'bo')
+#estimate all the camera parameters given two GT kcams at f=10 and f=50 and the kcam_est values at f=10 and f=50
+gt_est = (kcam_GT[-1]-kcam_GT[0])/(k_cams_est[-1]-k_cams_est[0])*(k_cams_est-k_cams_est[0]) + kcam_GT[0]
+plt.plot(kcam_GT)
+plt.plot(gt_est)
 plt.show()
 
-x_positions=(f*1e-3)**2/(fdist-f*1e-3)*1500
+#scale all estimated kcam values like above
+f_10_kcams_scaled=(kcam_GT[-1]-kcam_GT[0])/(k_cams_est[-1]-k_cams_est[0])*(f_10_kcams-k_cams_est[0]) + kcam_GT[0]
+f_20_kcams_scaled=(kcam_GT[-1]-kcam_GT[0])/(k_cams_est[-1]-k_cams_est[0])*(f_20_kcams-k_cams_est[0]) + kcam_GT[0]
+f_25_kcams_scaled=(kcam_GT[-1]-kcam_GT[0])/(k_cams_est[-1]-k_cams_est[0])*(f_25_kcams-k_cams_est[0]) + kcam_GT[0]
+f_30_kcams_scaled=(kcam_GT[-1]-kcam_GT[0])/(k_cams_est[-1]-k_cams_est[0])*(f_30_kcams-k_cams_est[0]) + kcam_GT[0]
+f_40_kcams_scaled=(kcam_GT[-1]-kcam_GT[0])/(k_cams_est[-1]-k_cams_est[0])*(f_40_kcams-k_cams_est[0]) + kcam_GT[0]
+f_50_kcams_scaled=(kcam_GT[-1]-kcam_GT[0])/(k_cams_est[-1]-k_cams_est[0])*(f_50_kcams-k_cams_est[0]) + kcam_GT[0]
+
+
+
+# from sklearn.linear_model import RANSACRegressor
+# kcam_GT=np.expand_dims(kcam_GT,1)
+# reg = RANSACRegressor(random_state=0).fit(kcam_GT, k_cams_est)
+# reg.estimator_.coef_
+# reg.estimator_.intercept_
+
+kcam_GT_=kcam_GT
 fig, ax = plt.subplots(figsize=(12, 7))
-ax.boxplot(f_10_kcams, positions=[x_positions[0]])
-ax.boxplot(f_20_kcams, positions=[x_positions[1]])
-ax.boxplot(f_25_kcams, positions=[x_positions[2]])
-ax.boxplot(f_30_kcams, positions=[x_positions[3]])
-ax.boxplot(f_40_kcams, positions=[x_positions[4]])
-ax.boxplot(f_50_kcams, positions=[x_positions[5]])
-ax.set_xlim([0,2])
-ax.set_ylim([0,11])
+ax.boxplot(f_10_kcams_scaled, positions=[round(kcam_GT[0],1)])
+ax.boxplot(f_20_kcams_scaled, positions=[round(kcam_GT_[1],1)])
+ax.boxplot(f_25_kcams_scaled, positions=[round(kcam_GT_[2],1)])
+ax.boxplot(f_30_kcams_scaled, positions=[round(kcam_GT_[3],1)])
+ax.boxplot(f_40_kcams_scaled, positions=[round(kcam_GT_[4],1)])
+ax.boxplot(f_50_kcams_scaled, positions=[round(kcam_GT[5],1)])
+ax.plot(kcam_GT_,kcam_GT_,'bo-',linewidth=0.5,markersize=3)
+plt.savefig("G:\\My Drive\\focus-defocus\\camind\\images\\kcamest\\total.png",dpi=500)
 plt.show()
+
+#seperate box plots
+kcam_GT_=kcam_GT
+i=5
+boxprops=dict(linestyle='-', linewidth=5)
+medianprops=dict(linestyle='-', linewidth=5)
+whiskerprops=dict(linestyle='-', linewidth=5)
+capprops=dict(linestyle='-', linewidth=5)
+
+fig, ax = plt.subplots(figsize=(12, 7))
+ax.boxplot(f_50_kcams_scaled, positions=[round(kcam_GT[i],2)],boxprops=boxprops,medianprops=medianprops,whiskerprops=whiskerprops,capprops=capprops)
+plt.ylim([np.min(f_50_kcams_scaled)-0.5,np.max(f_50_kcams_scaled)+0.5])
+ax.plot(round(kcam_GT_[i],2),round(kcam_GT_[i],2),'bo-',markersize=15)
+ax.set_facecolor("#e6fce6")
+
+plt.savefig("G:\\My Drive\\focus-defocus\\camind\\images\\kcamest\\"+str(i)+'.png',dpi=300)
+plt.show()
+
+
+ax.boxplot(f_20_kcams_scaled, positions=[round(kcam_GT_[1],1)])
+ax.boxplot(f_25_kcams_scaled, positions=[round(kcam_GT_[2],1)])
+ax.boxplot(f_30_kcams_scaled, positions=[round(kcam_GT_[3],1)])
+ax.boxplot(f_40_kcams_scaled, positions=[round(kcam_GT_[4],1)])
+ax.boxplot(f_50_kcams_scaled, positions=[round(kcam_GT[5],1)])
+ax.plot(kcam_GT_,kcam_GT_,'bo-')
+plt.show()
+
+
+'''
+NYU estimating kcam values
+
+----experiments----
+trained models used 1/kcam scaled with f_base 
+We do not use N,px for these kcams
+these values are proportional to base_f** (s1-f)/f**2
+
+----theory-----
+theory was developped for kcam (not scaled)
+these values are proportional to f**2/(s1-f/N/px)
+
+When we estimate kcam with the blur calibration we estimate the theoratical value. 
+We need to trasform this to experimetal values. 
+'''
+
+base_f=25e-3
+fdist=2
+N=1
+px=36*1e-6
+
+#estimated kcams (from circualr pattern experiments)
+k_cams_est=np.array([0.89,2.01,3.28,4.72,8.34,12.66])
+
+#thoeratical GT kcams
+f=np.array([10,20,25,30,40,50])
+kcam_GT_exp=(f*1e-3)**2/(base_f**2)/(fdist-f*1e-3)
+
+#scale estimated kcams to 1/kcam scaled with f_base
+# we need to do this because expperimantal estimation plot has an intercept and need to avoid it. 
+gt_est = (kcam_GT_exp[-1]-kcam_GT_exp[0])/(k_cams_est[-1]-k_cams_est[0])*(k_cams_est-k_cams_est[0]) + kcam_GT_exp[0]
+est_kcams=1/gt_est
+kcam_exp_GT=1/kcam_GT_exp
+#use est_kcams and kcam_exp_GT as kcams in the experiments (to evaluate the networks)
+
+plt.plot(kcam_exp_GT,est_kcams)
+plt.show()
+
+#get kcam values consistant with the theory
+kcams_GT_theory = kcam_GT_exp*N/px*base_f**2
+kcams_est_therory = (kcams_GT_theory[-1]-kcams_GT_theory[0])/(k_cams_est[-1]-k_cams_est[0])*(k_cams_est-k_cams_est[0]) + kcams_GT_theory[0]
+plt.plot(kcams_GT_theory,kcams_est_therory)
+plt.show()
+
+
+
+'''
+RMSE vs kcam used
+'''
+from scipy.interpolate import make_interp_spline
+#f=30 
+#kcam values used in the experiments
+kcams_30_theory=np.arange(kcams_GT_theory[3]-5,kcams_GT_theory[3]+5,step=0.5)
+kcam_30_exp=1/(kcams_30_theory/N*px/base_f**2)
+rmse_30=[0.1488,0.1459,0.1428,0.1394,0.1358,0.1321,0.1286,0.1256,0.1236,0.1227,0.1232,0.1250,0.1281,0.1324,0.1377,0.1437,0.1505,0.1577,0.1652,0.1729,0.1809]
+
+kcams_40_theory=np.arange(kcams_GT_theory[4]-5,kcams_GT_theory[4]+5,step=0.5)
+kcam_40_exp=1/(kcams_40_theory/N*px/base_f**2)
+rmse_40=[0.1385,0.1326,0.1276,0.1237,0.1207,0.1187,0.1174,0.1169,0.1168,0.1171,0.1178,0.1186,0.1195,0.1206,0.1218,0.1231,0.1244,0.1258,0.1271,0.1285]
+
+X_Y_Spline_30 = make_interp_spline(kcams_30_theory,rmse_30)
+X_Y_Spline_40 = make_interp_spline(kcams_40_theory, rmse_40)
+
+kcams_30_=np.arange(np.min(kcams_30_theory),np.max(kcams_30_theory),step=0.01)
+kcams_40_=np.arange(np.min(kcams_40_theory),np.max(kcams_40_theory),step=0.01)
+
+Y30_=X_Y_Spline_30(kcams_30_)
+Y40_=X_Y_Spline_40(kcams_40_)
+
+kcams_30_theory_=np.append(kcams_30_theory,[12.69,12.53])
+rmse_30_=rmse_30 +[0.1232,0.1229]
+ind=np.argsort(kcams_30_theory_)
+kcams_30_theory_=kcams_30_theory_[ind]
+rmse_30_=np.array(rmse_30_)[ind]
+
+kcams_40_theory_=np.append(kcams_40_theory,[22.67,23.05])
+rmse_40_=rmse_40 +[0.1178,0.1183]
+ind=np.argsort(kcams_40_theory_)
+kcams_40_theory_=kcams_40_theory_[ind]
+rmse_40_=np.array(rmse_40_)[ind]
+
+plt.plot(kcams_30_theory_,rmse_30_,'ro-',markersize=4)
+plt.plot(kcams_40_theory_,rmse_40_,'bo-',markersize=4)
+
+# plt.plot(kcams_30_,Y30_,'ro',linewidth=3)
+# plt.plot(kcams_40_,Y40_,'b0',linewidth=3)
+
+#***for f=30****
+#plot GT kcam performance
+
+# >>> kcam_exp_GT
+# array([12.4375    ,  3.09375   ,  1.975     ,  1.36805556,  0.765625  ,
+#         0.4875    ])
+# >>> est_kcams
+# array([12.4375    ,  3.73210369,  2.08070558,  1.38555315,  0.75306852,
+#         0.4875    ])
+
+plt.plot([12.69],[0.1232],marker="*", markersize=20, markerfacecolor="#00fbff",markeredgewidth=0)
+#plot estimated kcam performance
+plt.plot([12.53],[0.1229],marker="+", markersize=20, markeredgecolor="#092d8c")
+
+#***for f=40****
+#plot GT kcam performance
+plt.plot([22.67],[0.1178],marker="*", markersize=20, markerfacecolor="#ff00b2",markeredgewidth=0)
+#plot estimated kcam performance
+plt.plot([23.05],[0.1183],marker="+", markersize=20, markeredgecolor="#7b0632")
+
+plt.xlim([11.0,24.0])
+plt.ylim([0.115,0.13])
+plt.xlabel('kcam used')
+plt.ylabel('RMSE')
+plt.savefig(r'G:\My Drive\focus-defocus\camind\images\kcamest\est_error_variation_mag.png',dpi=300)
+plt.show()
+
+
+import cv2
+path=r'C:\Users\lahir\Downloads\f_10_focused.jpg'
+img=cv2.imread(path,cv2.IMREAD_GRAYSCALE)
+values=img[54,:]*-1
+# plt.plot(values)
+# plt.show()
+
+kernel_size = 10
+kernel = np.ones(kernel_size) / kernel_size
+data_convolved = np.convolve(values, kernel, mode='same')[int(kernel_size/2):]
+plt.plot(data_convolved,linewidth=5)
+plt.axis('off')
+plt.show()
+
+
+'''
+Various blur (sigma) vs distance plots for different cameras
+'''
+
+s1=2
+N=1
+px=36*1e-6
+f=np.array([25,50,30,40])*1e-3
+kcams=f**2/N/px/(s1-f)
+s2=np.arange(0.1,5,0.01)
+fig, ax = plt.subplots()
+
+for f_ in f:
+    sigma=np.abs(s1-s2)/s2/(s1-f_)*f_**2/N/px
+    ax.plot(s2,sigma)
+plt.xlabel('Distance in m',fontsize='x-large')
+plt.ylabel(r'$\sigma$',fontsize='x-large')
+plt.ylim([0,15])
+legend = ax.legend(['f=10mm' , 'f=20mm' , 'f=35mm'],loc='upper center', fontsize='x-large')
+plt.savefig(r'C:\Users\lahir\Downloads\sig_blur.png',dpi=300,bbox_inches='tight')
+plt.show()
+
+
+'''
+blender dataset kcam calculation
+'''
+fdist=1.5
+N=2
+px=36*1e-6
+f=np.array([3,4,5,6])
+kcam_GT=(f*1e-3)**2/(fdist-f*1e-3)/N/px
+
+
+'''
+calculate the kcam of defocusnet dataset
+'''
+
+N=1
+px=36*1e-6
+f=2.9e-3
+fdist=np.array([0.1,.15,.3,0.7,1.5])
+kcams=f**2/(fdist-f)/N/px
+
+N=2
+px=36*1e-6
+f=np.array([3,4,5,6])*1e-3
+fdist=1.5
+kcams_test=f**2/(fdist-f)/N/px
+
+
+
+
+

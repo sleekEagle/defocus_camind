@@ -11,10 +11,12 @@ from scipy import integrate
 
 grid_size=(4,11)
 fdist=2.0
+#distance between ajecent circle centers of the calibration pattern
+d=29
 
-calib_mtx_pth='C:\\Users\\lahir\\data\\calibration\\kinect_calib\\kinect\\k.npy'
-dist_mtx_pth='C:\\Users\\lahir\\data\\calibration\\kinect_calib\\kinect\\dist.npy'
-img_dir='C:\\Users\\lahir\\data\\calibration\\kinect_blur\\kinect2\\kinect\\cameras\\f_50\\'
+calib_mtx_pth='C:\\Users\\lahir\\data\\pixelcalib\\k.npy'
+dist_mtx_pth='C:\\Users\\lahir\\data\\pixelcalib\\dist.npy'
+img_dir='C:\\Users\\lahir\\data\\pixelcalib\\blurcalib\\'
 
 
 '''
@@ -31,8 +33,8 @@ focal length (fdist or s1 in the equations above) must be constant for all the i
 mtx=np.load(calib_mtx_pth)
 dist=np.load(dist_mtx_pth)  
 
-blurred_pth=os.path.join(img_dir,'undist')
-focused_pth=os.path.join(img_dir,'rgb')
+blurred_pth=os.path.join(img_dir,'blurred')
+focused_pth=os.path.join(img_dir,'focused')
 
 def imshow(img):
     cv2.imshow('image',img)
@@ -79,7 +81,7 @@ def get_centers(gray):
 #assume the points are are asymetric circular patters with 
 #d as the longer distance between adjecent circle centers
 def get_center_dist(mtx,dist,centers):
-    objp=def_calib.calibrate_cam.get_obj_points(d=151)
+    objp=def_calib.calibrate_cam.get_obj_points(d=d)
     ret,rvecs, tvecs = cv2.solvePnP(objp, centers, mtx, dist)
     R,_=cv2.Rodrigues(rvecs)
     objp_t=np.transpose(objp)

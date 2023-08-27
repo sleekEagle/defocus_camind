@@ -22,6 +22,7 @@ from utils_depth import test
 
 opt = NYUOptions()
 args = opt.initialize().parse_args()
+print(args)
 
 #setting up logging
 if not os.path.exists(args.resultspth):
@@ -55,22 +56,24 @@ model_params = model.parameters()
 criterion=torch.nn.MSELoss()
 model.eval()
 
-# #f in mm
-# train_f=float(args.eval_trained_rgb_dir.split('_')[-3])
-# #fdist in m
-# train_fdist=float(args.eval_trained_rgb_dir.split('_')[-1])
 
-# test_f=float(args.eval_test_rgb_dir[0].split('_')[-3])
-# test_fdist=float(args.eval_test_rgb_dir[0].split('_')[-1])
+# result=test.validate_dist(val_loader,model,criterion,0,args,min_dist=0.0,max_dist=2.0,kcam_exp=0.753)
+# print(result)
 
-# kcam=train_f**2/test_f**2 * (test_fdist-test_f*1e-3)
+import numpy as np
+# f_30 =np.array([2.25751742, 2.11970182, 1.99774468, 1.88905766, 1.79158664,
+#        1.70368064, 1.62399757, 1.5514352 , 1.48507985, 1.42416777,
+#        1.36805556, 1.31619738, 1.26812714, 1.22344442, 1.18180335,
+#        1.14290356, 1.10648298, 1.07231193, 1.04018823, 1.00993323,
+#        0.98138849])
+
+f_40=np.array([0.98220013, 0.95518059, 0.92960782, 0.90536865, 0.88236142,
+       0.86049452, 0.83968524, 0.81985865, 0.80094675, 0.78288767,
+       0.765625  , 0.74910719, 0.73328704, 0.71812128, 0.70357012,
+       0.68959694, 0.67616798, 0.66325205, 0.6508203 , 0.63884601])
 
 
-result=test.validate_dist(val_loader,model,criterion,0,args,min_dist=0.0,max_dist=2.0)
-print(result)
-
-# for n in range(0,100):
-#     kcam=n/10.
-#     print('kcam='+str(kcam))
-#     result=test.validate_dist(val_loader,model,criterion,0,args,min_dist=0.0,max_dist=2.0,kcam=kcam)
-#     print(result)
+for kcam in f_40:
+    print('kcam='+str(kcam))
+    result=test.validate_dist(val_loader,model,criterion,0,args,min_dist=0.0,max_dist=2.0,kcam_exp=kcam)
+    print(result)

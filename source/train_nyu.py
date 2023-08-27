@@ -78,9 +78,14 @@ for i in range(800):
         depth_gt=batch['depth'].to(device_id)
         class_id=batch['class_id']
         gt_blur=batch['blur'].to(device_id)
-        f=batch['f']
+        
         fdist=batch['fdist']
-        kcam=(fdist-f)*(base_f**2)/(f**2)
+        #if we use a single kcam instead of different ones depending on the dataset
+        if args.kcam:
+            kcam=torch.ones_like(fdist)*args.kcam
+        else:
+            f=batch['f']
+            kcam=(fdist-f)*(base_f**2)/(f**2)
         x2=fdist.tolist()
         kcam=kcam.tolist()
 
