@@ -14,6 +14,7 @@ class NYUOptions(BaseOptions):
         parser.add_argument('--max_train_dist',          type=float, default=2.0)
         parser.add_argument('--is_blur',type=int,default=1)
         parser.add_argument('--kcam',type=float,default=None)
+        parser.add_argument('--bweight',type=float,default=1)
         
         parser.add_argument('--crop_h',  type=int, default=480)
         parser.add_argument('--crop_w',  type=int, default=480)        
@@ -23,7 +24,10 @@ class NYUOptions(BaseOptions):
         parser.add_argument('--val_freq', type=int, default=1)
         parser.add_argument('--save_model', action='store_true')    
 
-        parser.add_argument('--data_path', type=str, default='D:\\data\\')
+        #path to mobilekinect data
+        parser.add_argument('--data_path', type=str, default='C:\\Users\\lahir\\data\\kinectmobile\\')
+        #path to NYU depth data
+        # parser.add_argument('--data_path', type=str, default='D:\\data\\')
         parser.add_argument('--rgb_dir', nargs="+", default=['refocused_f_30_fdist_2'])
         parser.add_argument('--depth_dir', type=str, default='rawDepth')
         parser.add_argument('--resume_from', type=str, default='')

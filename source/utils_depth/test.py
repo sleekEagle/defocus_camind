@@ -4,6 +4,7 @@ import utils_depth.logging as logging
 import utils
 import torch
 import math
+import numpy as np
 
 metric_name = ['d1', 'd2', 'd3', 'abs_rel', 'sq_rel', 'rmse', 'rmse_log',
                'log10', 'silog']
@@ -220,7 +221,7 @@ def validate_dist(val_loader, model, criterion_d, device_id, args,min_dist=0.0,m
 
 
 #provides distance wise error with 2d shifting
-def validate_dist_mobilekinect(val_loader, model, criterion_d, device_id, args,min_dist=0.0,max_dist=10.0,base_f=25e-3):
+def validate_dist_mobilekinect(val_loader, model, criterion_d, device_id, args,min_dist=0.0,max_dist=10.0,base_f=25e-3,kcam=1):
 
     if device_id == 0:
         depth_loss = logging.AverageMeter()
@@ -235,12 +236,18 @@ def validate_dist_mobilekinect(val_loader, model, criterion_d, device_id, args,m
     for batch_idx, batch in enumerate(val_loader):
         input_RGB=batch['image'].float().to(device_id)
         depth_gt=batch['depth'].to(device_id)
-        base_f=25*1e-3
-        f=25*1e-3
-        fdist=batch['fdist']
-        kcam=(fdist-f)*(base_f**2)/(f**2)
-        x2=fdist.tolist()
-        kcam=kcam.tolist()
+        if kcam:
+            fdist=batch['fdist']
+            kcam_=np.ones_like(fdist)*kcam
+            x2=fdist.tolist()
+            kcam=kcam_.tolist()
+        else:
+            base_f=25*1e-3
+            f=25*1e-3
+            fdist=batch['fdist']
+            kcam=(fdist-f)*(base_f**2)/(f**2)
+            x2=fdist.tolist()
+            kcam=kcam.tolist()
 
         #if(batch_idx>10): break
         with torch.no_grad():

@@ -37,6 +37,14 @@ parser.add_argument('--n_imgs',
                     help='number of images to obtain. -1 for infinity')
 args = parser.parse_args()
 
+'''
+examples:
+take 1 depth+rgb from kinect
+python takepictures.py --output C:\\Users\\lahir\\data\\kinectimgs\\ --sensor kinect --kinectmode depth color --n_imgs 1
+
+'''
+
+
 #create directories if they are not there
 if 'kinect' in args.sensor:
     kdir=os.path.join(args.output,'kinect')

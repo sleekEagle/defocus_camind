@@ -12,11 +12,11 @@ from scipy import integrate
 grid_size=(4,11)
 fdist=2.0
 #distance between ajecent circle centers of the calibration pattern
-d=29
+d=14
 
-calib_mtx_pth='C:\\Users\\lahir\\data\\pixelcalib\\k.npy'
-dist_mtx_pth='C:\\Users\\lahir\\data\\pixelcalib\\dist.npy'
-img_dir='C:\\Users\\lahir\\data\\pixelcalib\\blurcalib\\'
+calib_mtx_pth='C:\\Users\\lahir\\data\\pixelcalib\\telephoto\\k.npy'
+dist_mtx_pth='C:\\Users\\lahir\\data\\pixelcalib\\telephoto\\dist.npy'
+img_dir='C:\\Users\\lahir\\data\\pixelcalib\\telephoto\\blurcalib\\'
 
 
 '''

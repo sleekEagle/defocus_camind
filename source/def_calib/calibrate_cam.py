@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 import os
 
-photos_dir='C:\\Users\\lahir\\data\\pixelcalib\\calib\\'
-out_path='C:\\Users\\lahir\\data\\pixelcalib\\'
+photos_dir='C:\\Users\\lahir\\data\\pixelcalib\\telephoto\\calib\\'
+out_path='C:\\Users\\lahir\\data\\pixelcalib\\telephoto\\'
 
 def get_reprojection_errors(objpoints,imgpoints,rvecs,tvecs,mtx,dist):
     errors=[]
@@ -41,6 +41,8 @@ def calibrate(photos_dir,d=42.5,grid_size=(4,11)):
     imgpoints = [] # 2d points in image plane.
     found=0
 
+# p=r'C:\Users\lahir\data\pixelcalib\telephoto\OpenCamera\IMG_20230829_065058_1.jpg'
+# gray=cv2.imread(p,cv2.IMREAD_GRAYSCALE)
     img_pths=os.listdir(photos_dir)
     for i,item in enumerate(img_pths):
         print(str(i)+' done')
@@ -54,7 +56,8 @@ def calibrate(photos_dir,d=42.5,grid_size=(4,11)):
             imgpoints.append(corners2)
             im_with_keypoints = cv2.drawChessboardCorners(gray, (4,11), corners2, ret)
             found += 1
-            cv2.imshow("img", im_with_keypoints) # display
+            im_ = cv2.resize(im_with_keypoints, (960, 540))    
+            cv2.imshow("img", im_) # display
             cv2.waitKey(0)
             cv2.destroyAllWindows()
     print('num good images:'+str(found))
@@ -63,10 +66,10 @@ def calibrate(photos_dir,d=42.5,grid_size=(4,11)):
 
 #calibrate the first round
 if __name__ == "__main__":
-    ret, mtx, dist, rvecs,tvecs,objpoints,imgpoints,imshape=calibrate(photos_dir,d=29)
+    ret, mtx, dist, rvecs,tvecs,objpoints,imgpoints,imshape=calibrate(photos_dir,d=14)
     errors=get_reprojection_errors(objpoints,imgpoints,rvecs,tvecs,mtx,dist)
 
-    thr_error=0.2
+    thr_error=0.035
     valid_args=np.argwhere(errors<thr_error)
     #recalibrate with the selected images
     objpoints_selected=[pt for i,pt in enumerate(objpoints) if i in valid_args]

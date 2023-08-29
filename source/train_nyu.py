@@ -100,7 +100,7 @@ for i in range(800):
             # logging.info('nan in losses')
             continue
 
-        loss=loss_d+loss_b
+        loss=loss_d+loss_b*args.bweight
         total_d_loss+=loss_d.item()
         total_b_loss+=loss_b.item()
         loss.backward()
@@ -118,7 +118,7 @@ for i in range(800):
             result=test.validate_dist(val_loader, model, criterion, device_id, args,min_dist=0.0,max_dist=2.0)
             print(result)
             logging.info(result)
-            modelname="_".join([str(element)[10:] for element in args.rgb_dir])
+            modelname="_".join([str(element)[10:] for element in args.rgb_dir])+'_bweight_'+str(args.bweight)
             torch.save({
                 'state_dict': model.state_dict()
                 },  os.path.join(os.path.abspath(args.resultspth),(modelname)+'.tar'))

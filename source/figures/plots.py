@@ -355,6 +355,12 @@ kcam_exp_GT=1/kcam_GT_exp
 plt.plot(kcam_exp_GT,est_kcams)
 plt.show()
 
+
+#stimate experiment kcam for a given kcam from defocus blur calibration
+kcam_calib=8.24
+gt_est = (kcam_GT_exp[-1]-kcam_GT_exp[0])/(k_cams_est[-1]-k_cams_est[0])*(kcam_calib-k_cams_est[0]) + kcam_GT_exp[0]
+kcam_exp=1/gt_est
+
 #get kcam values consistant with the theory
 kcams_GT_theory = kcam_GT_exp*N/px*base_f**2
 kcams_est_therory = (kcams_GT_theory[-1]-kcams_GT_theory[0])/(k_cams_est[-1]-k_cams_est[0])*(k_cams_est-k_cams_est[0]) + kcams_GT_theory[0]
