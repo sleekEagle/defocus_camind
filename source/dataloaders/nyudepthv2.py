@@ -38,9 +38,13 @@ class nyudepthv2(BaseDataset):
         # self.fdist=float(rgb_dir.split('_')[-1])
         # self.f=float(rgb_dir.split('_')[2])*1e-3
         for dirname in rgb_dir_list:
-            fdist=float(dirname.split('_')[-1])
-            f=float(dirname.split('_')[2])*1e-3
-            print('rgb dir:'+str(dirname))
+            splitvals=dirname.split('\\')
+            #get last non empty string
+            s_=[s for s in splitvals if len(s)>0]
+            s=s_[-1]
+            fdist=float(s.split('_')[4])
+            f=float(s.split('_')[2])*1e-3
+            print('rgb dir:'+str(s))
             print('fdist:'+str(fdist))
             print('f:'+str(f))
         
@@ -74,16 +78,19 @@ class nyudepthv2(BaseDataset):
         num=self.file_idx[idx]
         #select an item from rgb_dir_list
         rgb_dir=random.choice(self.rgb_dir_list)
+        splitvals=rgb_dir.split('\\')
+        #get last non empty string
+        s_=[s for s in splitvals if len(s)>0]
+        s=s_[-1]
         #fdist in m
-        fdist=float(rgb_dir.split('_')[-1])
+        fdist=float(s.split('_')[-1])
         #f in m
-        f=float(rgb_dir.split('_')[2])*1e-3
+        f=float(s.split('_')[2])*1e-3
         
         # print('rgb dir:'+str(rgb_dir))
         # print('fdist:'+str(fdist))
         # print('f:'+str(f))
         # print('______')
-
         rgbpath=os.path.join(self.data_path,rgb_dir)
         gt_path=os.path.join(self.depthpath,(str(num)+".png"))
         img_path=os.path.join(rgbpath,(str(num)+".png"))
@@ -96,6 +103,7 @@ class nyudepthv2(BaseDataset):
                 break
 
         assert class_id >= 0
+
         image = cv2.imread(img_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         depth = cv2.imread(gt_path, cv2.IMREAD_UNCHANGED).astype('float32')
@@ -114,6 +122,7 @@ class nyudepthv2(BaseDataset):
 
         depth = depth / 1000.0  # convert in meters
         blur=get_blur(fdist,depth,f)
+
         return {'image': image, 'depth': depth, 'blur':blur, 'class_id': class_id,'fdist':fdist,'f':f}
 
 # for st_iter, sample_batch in enumerate(loader):
