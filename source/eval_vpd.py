@@ -11,7 +11,7 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 import sys 
 #include stable diffision path
-sys.path.append('C:\\Users\\lahir\\code\\defocusVdepth\\stable-diffusion\\')
+sys.path.append('C:\\Users\\***\\code\\defocusVdepth\\stable-diffusion\\')
 from arch.model import VPDDepth
 import utils_depth.metrics as metrics
 import logging

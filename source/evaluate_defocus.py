@@ -32,10 +32,10 @@ TRAIN_PARAMS = {
 }
 
 DATA_PARAMS = {
-    #'DATA_PATH': 'C:\\Users\\lahir\\focalstacks\\datasets\\',
+    #'DATA_PATH': 'C:\\Users\\***\\focalstacks\\datasets\\',
     #'DATA_SET': '',  
     #'DATA_NUM': 'mediumN1',
-    'DATA_PATH': 'C:\\Users\\lahir\\focalstacks\\datasets\\',
+    'DATA_PATH': 'C:\\Users\\***\\focalstacks\\datasets\\',
     'DATA_SET': '',
     'DATA_NUM': 'mediumN1-3',
     'FLAG_NOISE': False,
@@ -61,14 +61,14 @@ DATA_PARAMS = {
 }
 
 OUTPUT_PARAMS = {
-    'RESULT_PATH': 'C:\\Users\\lahir\\code\\defocus\\results\\',
-    'MODEL_PATH': 'C:\\Users\\lahir\\code\\defocus\\models\\a01_dmediumN1_t01\\a01_dmediumN1_t01_ep0.pth',
+    'RESULT_PATH': 'C:\\Users\\***\\code\\defocus\\results\\',
+    'MODEL_PATH': 'C:\\Users\\***\\code\\defocus\\models\\a01_dmediumN1_t01\\a01_dmediumN1_t01_ep0.pth',
 }
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
 parser.add_argument('--dataset', default='ddff', help='blender data path')
-parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
-parser.add_argument('--blenderpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1-3\\', help='blender data path')
+parser.add_argument('--ddffpth', default='C:\\Users\\***\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
+parser.add_argument('--blenderpth', default='C:\\Users\\***\\focalstacks\\datasets\\mediumN1-3\\', help='blender data path')
 parser.add_argument('--s2limits', nargs='+', default=[0,1.0],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--gtscale', default=1.0,help='gt depth values has been divided by this value')
 parser.add_argument('--modelscale', default=3.0,help='multiply predicted depth by this value')

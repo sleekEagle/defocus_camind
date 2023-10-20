@@ -14,9 +14,9 @@ from torch.optim.lr_scheduler import StepLR
 from pathlib import Path
 
 parser = argparse.ArgumentParser(description='camIndDefocus')
-# parser.add_argument('--datapath', default="C://Users//lahir//focalstacks//datasets//mediumN1//", help='blender data path')
-parser.add_argument('--datapath', default='C:\\Users\\lahir\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
-# parser.add_argument('--datapath', default='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\', help='blender data path')
+# parser.add_argument('--datapath', default="C://Users//***//focalstacks//datasets//mediumN1//", help='blender data path')
+parser.add_argument('--datapath', default='C:\\Users\\***\\focalstacks\\datasets\\defocusnet_N1\\', help='blender data path')
+# parser.add_argument('--datapath', default='C:\\Users\\***\\data\\nyu_depth\\noborders\\', help='blender data path')
 parser.add_argument('--bs', type=int,default=12, help='training batch size')
 parser.add_argument('--epochs', type=int,default=10000, help='training batch size')
 parser.add_argument('--depthscale', type=float,default=1.,help='divide all depths by this value')
@@ -28,8 +28,8 @@ blurclip is
 parser.add_argument('--blurclip', type=float,default=6.5,help='Clip blur by this value : only applicable for camind model. Default=10')
 parser.add_argument('--blurweight', type=float,default=1.0,help='weight for blur loss')
 parser.add_argument('--depthweight', type=float,default=1.0,help='weight for blur loss')
-parser.add_argument('--savepath', default='C:\\Users\\lahir\\models\\camind\\', help='path to the saved model')
-parser.add_argument('--checkpt', default=r'C:\Users\lahir\models\camind\camind_defocusnet_bs_12_depth_1_dweight_1.0_bweight_1.0\3269.pth', help='path to the saved model')
+parser.add_argument('--savepath', default='C:\\Users\\***\\models\\camind\\', help='path to the saved model')
+parser.add_argument('--checkpt', default=r'C:\Users\***\models\camind\camind_defocusnet_bs_12_depth_1_dweight_1.0_bweight_1.0\3269.pth', help='path to the saved model')
 parser.add_argument('--kcamscale', type=float,default=30,help='Scale up everything after blur prediction and before they are sent to the depth prediction network')
 
 '''
@@ -248,7 +248,7 @@ def main():
 if __name__ == "__main__":
     main()
 
-#datapath='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\'
+#datapath='C:\\Users\\***\\focalstacks\\datasets\\mediumN1\\'
 #focalblender.get_data_stats(datapath,50)
 '''
 fdist of DDFF 

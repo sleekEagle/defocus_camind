@@ -29,10 +29,10 @@ TRAIN_PARAMS = {
 }
 
 parser = argparse.ArgumentParser(description='defocu_camind')
-parser.add_argument('--dfvmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\FoD500_scale0.2_nsck6_lr0.0001_ep700_b20_lvl4_diffFeat1\\best.tar', help='DFV model path')
-parser.add_argument('--camindmodel', default='C:\\Users\\lahir\\code\\defocus\\models\\defocus_trained\\camind.pth', help='camind model path')
+parser.add_argument('--dfvmodel', default='C:\\Users\\***\\code\\defocus\\models\\FoD500_scale0.2_nsck6_lr0.0001_ep700_b20_lvl4_diffFeat1\\best.tar', help='DFV model path')
+parser.add_argument('--camindmodel', default='C:\\Users\\***\\code\\defocus\\models\\defocus_trained\\camind.pth', help='camind model path')
 parser.add_argument('--blenderpth', default='C://usr//wiss//maximov//RD//DepthFocus//Datasets//focal_data_remapped//', help='blender data path')
-parser.add_argument('--ddffpth', default='C:\\Users\\lahir\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
+parser.add_argument('--ddffpth', default='C:\\Users\\***\\focalstacks\\datasets\\my_dff_trainVal.h5', help='blender data path')
 parser.add_argument('--dataset', default='ddff', help='DFV model path')
 parser.add_argument('--s2limits', nargs='+', default=[0.02,0.28],  help='the interval of depth where the errors are calculated')
 parser.add_argument('--depthscale', default=1.9,help='divide all depths by this value')

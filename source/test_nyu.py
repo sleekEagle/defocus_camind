@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Wed Aug 29 14:54:12 2018
-@author: maximov
-"""
 
 import torch
 import torch.optim as optim
@@ -126,8 +122,8 @@ print(result)
 # import math
 # import matplotlib.image
 
-# img_path=r'C:\Users\lahir\data\pixelcalib\telephoto\OpenCamera\crop21.jpg'
-# # img_path=r'C:\Users\lahir\data\kinectimgs\kinect\f_40\3_480.png'
+# img_path=r'C:\Users\***\data\pixelcalib\telephoto\OpenCamera\crop21.jpg'
+# # img_path=r'C:\Users\***\data\kinectimgs\kinect\f_40\3_480.png'
 # image = cv2.imread(img_path)
 # image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 # transform = transforms.ToTensor()
@@ -139,7 +135,7 @@ print(result)
 # for kcam in np.linspace(0.765-0.7,0.765+0.7,num=100):
 #     print(kcam)
 #     with torch.no_grad():
-#         fname='C:\\Users\\lahir\\data\\kinectimgs\\kinect\\f_40\\kcam_variation\\pred_kcam_'+str(round(kcam,1))+'.jpeg'
+#         fname='C:\\Users\\***\\data\\kinectimgs\\kinect\\f_40\\kcam_variation\\pred_kcam_'+str(round(kcam,1))+'.jpeg'
 #         pred_d,pred_b =model(image_t,flag_step2=True,x2_list=x2,kcam_list=kcam)
 #         im = pred_d.detach().cpu().numpy()[0,0,:,:]
 #         b = pred_b.detach().cpu().numpy()[0,0,:,:]

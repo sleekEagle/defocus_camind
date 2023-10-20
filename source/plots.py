@@ -451,7 +451,7 @@ plt.show()
 
 
 import cv2
-path=r'C:\Users\lahir\Downloads\f_10_focused.jpg'
+path=r'C:\Users\***\Downloads\f_10_focused.jpg'
 img=cv2.imread(path,cv2.IMREAD_GRAYSCALE)
 values=img[54,:]*-1
 # plt.plot(values)
@@ -484,7 +484,7 @@ plt.xlabel('Distance in m',fontsize='x-large')
 plt.ylabel(r'$\sigma$',fontsize='x-large')
 plt.ylim([0,15])
 legend = ax.legend(['f=10mm' , 'f=20mm' , 'f=35mm'],loc='upper center', fontsize='x-large')
-plt.savefig(r'C:\Users\lahir\Downloads\sig_blur.png',dpi=300,bbox_inches='tight')
+plt.savefig(r'C:\Users\***\Downloads\sig_blur.png',dpi=300,bbox_inches='tight')
 plt.show()
 
 

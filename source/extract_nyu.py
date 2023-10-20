@@ -5,14 +5,14 @@ import imageio
 import scipy 
 
 
-splits="C:\\Users\\lahir\\data\\matlabfiles\\splits.mat"
+splits="C:\\Users\\***\\data\\matlabfiles\\splits.mat"
 mat=scipy.io.loadmat(splits)
 test_idx=mat['testNdxs']
 train_idx=mat['trainNdxs']
 
 
-outpath='C:\\Users\\lahir\\data\\nyu_depthnew\\'
-with h5py.File('C:\\Users\\lahir\\data\\matlabfiles\\nyu_depth_v2_labeled.mat', 'r') as f:
+outpath='C:\\Users\\***\\data\\nyu_depthnew\\'
+with h5py.File('C:\\Users\\***\\data\\matlabfiles\\nyu_depth_v2_labeled.mat', 'r') as f:
     depths=f['depths'][:,:,:]
     imgs=f['images'][:,:,:,:]
 
@@ -34,8 +34,8 @@ from os.path import isfile, join, isdir
 from os import listdir, mkdir
 import os
 
-input_path='C:\\Users\\lahir\\data\\nuy_depth\\refocused8\\'
-output_path='C:\\Users\\lahir\\data\\nuy_depth\\refocused8_r\\'
+input_path='C:\\Users\\***\\data\\nuy_depth\\refocused8\\'
+output_path='C:\\Users\\***\\data\\nuy_depth\\refocused8_r\\'
 files = [f for f in listdir(input_path) if isfile(join(input_path, f)) and f[-4:] == ".png"]
 
 for file in files:
@@ -48,14 +48,14 @@ crop the border or RGB and depth images
 '''
 import cv2
 CROPPIX=20
-rgbpath='C:\\Users\\lahir\\data\\nyu_depth\\rgb\\'
-depthpath='C:\\Users\\lahir\\data\\nyu_depth\\depth\\'
+rgbpath='C:\\Users\\***\\data\\nyu_depth\\rgb\\'
+depthpath='C:\\Users\\***\\data\\nyu_depth\\depth\\'
 rgbfiles = [f for f in listdir(rgbpath) if isfile(join(rgbpath, f)) and f[-4:] == ".png"]
 depthfiles = [f for f in listdir(depthpath) if isfile(join(depthpath, f)) and f[-4:] == ".png"]
 rgbfiles.sort()
 depthfiles.sort()
 
-outpath='C:\\Users\\lahir\\data\\nyu_depth\\noborders\\'
+outpath='C:\\Users\\***\\data\\nyu_depth\\noborders\\'
 
 for i,rgb in enumerate(rgbfiles):
     rgbimg = cv2.imread(rgbpath+rgb,cv2.IMREAD_UNCHANGED)

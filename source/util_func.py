@@ -25,7 +25,7 @@ def weights_init(m):
 
 
 '''
-data_dir='C:\\Users\\lahir\\focalstacks\\datasets\\mediumN1\\'
+data_dir='C:\\Users\\***\\focalstacks\\datasets\\mediumN1\\'
 loaders, total_steps = load_data(data_dir,blur=1,aif=1,train_split=0.8,fstack=1,WORKERS_NUM=0,
 BATCH_SIZE=10,FOCUS_DIST=[0.1,.15,.3,0.7,1.5,100000],REQ_F_IDX=[0],MAX_DPT=3.)
 
